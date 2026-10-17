@@ -164,9 +164,6 @@ class SessionScreen extends StatefulWidget {
 class _SessionScreenState extends State<SessionScreen>
     with WidgetsBindingObserver {
   final c = SessionController();
-  final base = TextEditingController(
-    text: const String.fromEnvironment('KAZE_BASE_URL'),
-  );
   final name = TextEditingController(text: 'Alex'),
       link = TextEditingController();
   int tab = 0, interval = 120, grace = 30;
@@ -250,7 +247,6 @@ class _SessionScreenState extends State<SessionScreen>
     clock?.cancel();
     c.removeListener(update);
     c.dispose();
-    base.dispose();
     name.dispose();
     link.dispose();
     super.dispose();
@@ -409,16 +405,6 @@ class _SessionScreenState extends State<SessionScreen>
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: base,
-            decoration: const InputDecoration(
-              labelText: 'PC server URL',
-              hintText: 'https://your-server.example',
-            ),
-            autocorrect: false,
-            keyboardType: TextInputType.url,
-          ),
-          const SizedBox(height: 12),
-          TextField(
             controller: name,
             decoration: const InputDecoration(labelText: 'First name'),
             maxLength: 60,
@@ -464,7 +450,6 @@ class _SessionScreenState extends State<SessionScreen>
             onPressed: !consent || c.busy
                 ? null
                 : () => c.create(
-                    baseUrl: base.text,
                     name: name.text,
                     interval: interval,
                     grace: grace,

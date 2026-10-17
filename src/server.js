@@ -8,6 +8,7 @@ import { Store } from './store.js';
 import { Problem, token, hash, matches, number, label, advance, validateEvent } from './domain.js';
 import { reconstruct } from './trail.js';
 import { geographicTrail } from './locations.js';
+import { guardianArTrail } from './ar.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000 } = {}) {
@@ -82,9 +83,15 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000 }
           initialHeading: number(b.initialHeading ?? 0, 0, 360, 'initial heading'), ownerHash: hash(owner), guardianHash: hash(guardian), watchHash: hash(watch) };
         store.save(s); store.recordActivity(s.id, 'started', now(), 'owner'); return json(201, { ...snapshot(s, 'owner'), ownerToken: owner, guardianToken: guardian, watchToken: watch });
       }
-      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian))?$/.exec(url.pathname);
+      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar))?$/.exec(url.pathname);
       if (match) {
         const id = match[1], action = match[2]; let s = current(id);
+        if (action === 'ar') {
+          auth(req, s, ['owner', 'guardian']);
+          if (req.method !== 'GET') throw new Problem(405, 'Method not allowed');
+          if (s.phase !== 'alert') throw new Problem(409, 'An active assistance request is required');
+          return json(200, guardianArTrail(store.events(s.id), now()));
+        }
         if (req.method === 'GET' && !action) {
           const role = auth(req, s, ['owner', 'guardian', 'watch']);
           if (role === 'guardian') { s.guardianSeenAt = now(); if (s.phase === 'alert') s.alertSeenAt ??= now(); store.save(s); }

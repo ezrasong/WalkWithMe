@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:kaze/main.dart';
 import 'package:kaze/session.dart';
+import 'package:kaze/backend.dart';
 
 const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const token = 'guardian_012345678901234567890123456789012345';
@@ -20,6 +21,31 @@ SessionAccess guardian() => SessionAccess(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  test(
+    'guardian invitations cannot redirect access to a different service',
+    () async {
+      var requests = 0;
+      final c = SessionController(
+        client: MockClient((request) async {
+          requests++;
+          expect(request.url.origin, Uri.parse(kazeBackendUrl).origin);
+          expect(request.followRedirects, false);
+          return http.Response(
+            '{"role":"guardian","phase":"armed","shared":false,"serverNow":1000,"expiresAt":10000}',
+            200,
+          );
+        }),
+      );
+      addTearDown(c.dispose);
+      await c.join('https://other.example/guardian#session=$id&token=$token');
+      expect(requests, 0);
+      expect(c.access, isNull);
+      expect(c.message, contains('different KAZE service'));
+      await c.join('$kazeBackendUrl/guardian#session=$id&token=$token');
+      expect(requests, greaterThan(0));
+      expect(c.access?.role, 'guardian');
+    },
+  );
   test(
     'guardian links preserve scoped credentials and reject unsafe origins',
     () {

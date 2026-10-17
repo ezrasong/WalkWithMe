@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+import 'backend.dart';
+
 String validateBaseUrl(String input, {bool allowLocalHttp = kDebugMode}) {
   final uri = Uri.tryParse(input.trim());
   if (uri == null ||
@@ -15,9 +17,7 @@ String validateBaseUrl(String input, {bool allowLocalHttp = kDebugMode}) {
       uri.hasQuery ||
       uri.hasFragment ||
       (uri.path.isNotEmpty && uri.path != '/')) {
-    throw const FormatException(
-      'Enter the server origin, for example https://your-server.example',
-    );
+    throw const FormatException('Invalid KAZE server address.');
   }
   final ip = InternetAddress.tryParse(uri.host);
   final b = ip?.rawAddress;
@@ -31,9 +31,7 @@ String validateBaseUrl(String input, {bool allowLocalHttp = kDebugMode}) {
               (b[0] == 172 && b[1] >= 16 && b[1] <= 31)));
   if (uri.scheme != 'https' &&
       !(allowLocalHttp && uri.scheme == 'http' && local)) {
-    throw const FormatException(
-      'Use HTTPS. Debug builds also allow private local HTTP.',
-    );
+    throw const FormatException('KAZE requires a secure server connection.');
   }
   return uri.replace(path: '').toString();
 }
@@ -271,7 +269,6 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<void> create({
-    required String baseUrl,
     required String name,
     required int interval,
     required int grace,
@@ -282,7 +279,7 @@ class SessionController extends ChangeNotifier {
         'Use the Vivo Android phone for wearer recording. This phone can join as guardian.',
       );
     }
-    final base = validateBaseUrl(baseUrl);
+    final base = validateBaseUrl(kazeBackendUrl);
     final status = await native.invokeMapMethod('status');
     if (status?['active'] == true) {
       throw const FormatException(
@@ -323,13 +320,19 @@ class SessionController extends ChangeNotifier {
     startPolling();
   });
   Future<void> join(String link) => run(() async {
+    final next = SessionAccess.guardian(link);
+    if (Uri.parse(next.baseUrl).origin !=
+        Uri.parse(validateBaseUrl(kazeBackendUrl)).origin) {
+      throw const FormatException(
+        'This invitation belongs to a different KAZE service. Ask the wearer for a current invitation.',
+      );
+    }
     if (Platform.isAndroid &&
         (await native.invokeMapMethod('status'))?['active'] == true) {
       throw const FormatException(
         'End your local recording session before using this phone as guardian.',
       );
     }
-    final next = SessionAccess.guardian(link);
     final data = await request(
       next.baseUrl,
       '/api/sessions/${next.id}',

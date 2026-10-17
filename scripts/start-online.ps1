@@ -39,7 +39,7 @@ try {
         $env:HOST = '127.0.0.1'
         $env:PORT = '4173'
         $env:KAZE_DB = 'data/kaze.sqlite'
-        $kazeBackend = Start-Process -FilePath $kazeNode -ArgumentList 'src/server.js' -WorkingDirectory $kazeRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $kazeArtifacts 'online-backend.stdout.log') -RedirectStandardError (Join-Path $kazeArtifacts 'online-backend.stderr.log')
+        $kazeBackend = Start-Process -FilePath $kazeNode -ArgumentList '--watch', 'src/server.js' -WorkingDirectory $kazeRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $kazeArtifacts 'online-backend.stdout.log') -RedirectStandardError (Join-Path $kazeArtifacts 'online-backend.stderr.log')
     } finally {
         $env:HOST = $kazePreviousHost
         $env:PORT = $kazePreviousPort
@@ -96,7 +96,9 @@ try {
 } finally {
     foreach ($kazeChild in @($kazeTunnel, $kazeBackend)) {
         if ($null -ne $kazeChild -and -not $kazeChild.HasExited) {
-            Stop-Process -Id $kazeChild.Id -ErrorAction SilentlyContinue
+            # Node's watch supervisor owns a child server; stop only this
+            # invocation's process tree so it cannot leave port 4173 occupied.
+            & taskkill.exe /PID $kazeChild.Id /T /F 2>$null | Out-Null
             $kazeChild.WaitForExit(5000) | Out-Null
         }
     }

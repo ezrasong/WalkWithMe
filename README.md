@@ -13,7 +13,7 @@ npm.cmd install
 powershell -ExecutionPolicy Bypass -File scripts/start-online.ps1
 ```
 
-Enter the printed HTTPS address in the phone app. The launcher runs the backend and a Cloudflare tunnel; keep it running while using KAZE. The temporary address changes on restart.
+The app contains its HTTPS service address; users do not enter a backend URL. The launcher runs the backend and a Cloudflare tunnel; keep it running while using KAZE. Its temporary address changes when the tunnel restarts. For developer builds, set `KAZE_BASE_URL` at build time to match that address; use a stable named HTTPS hostname before distributing the app.
 
 For local development, use `npm.cmd start` at `http://127.0.0.1:4173`. See [network setup](docs/PC_BACKEND.md).
 
@@ -34,3 +34,5 @@ cd ..
 Start a session on the phone, open KAZE on the paired watch, and share the guardian link from Settings. The watch uses the phone's Bluetooth connection; the phone can use Wi-Fi or cellular data.
 
 Wearer recording runs on Android. The iPhone guardian build still needs device verification. Keep the guardian app open; background push and emergency dispatch are not implemented. Camera guidance is an experimental compass preview.
+
+The [guardian AR backend](docs/AR_BACKEND.md) now prepares source-aware geographic frames and uncertainty-preserving recorded paths. Camera registration and a spatial AR renderer remain pending.

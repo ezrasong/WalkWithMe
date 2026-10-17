@@ -49,6 +49,9 @@ public abstract class MonitoringService extends Service implements SensorRecorde
     private JSONArray available = new JSONArray();
     protected abstract boolean isWatch();
     protected abstract Class<?> activityClass();
+    protected Notification recordingNotification() {
+        return notification("Safety session active · location when available", "recording", false);
+    }
     @Override public void onCreate() {
         super.onCreate();
         NotificationManager manager = getSystemService(NotificationManager.class);
@@ -74,7 +77,7 @@ public abstract class MonitoringService extends Service implements SensorRecorde
             if (intent != null && EVENT.equals(intent.getAction()) && !Config.prefs(this).getBoolean("active", false)) { stopSelf(); return START_NOT_STICKY; }
             config = Config.load(this, isWatch());
             if (config == null || (intent == null && !Config.prefs(this).getBoolean("active", false))) { stopSelf(); return START_NOT_STICKY; }
-            Notification recording = notification("Safety session active · location when available", "recording", false);
+            Notification recording = recordingNotification();
             if (Build.VERSION.SDK_INT >= 29) {
                 int type = Build.VERSION.SDK_INT >= 34 ? android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE : 0;
                 if (LocationRecorder.permitted(this)) type |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION;

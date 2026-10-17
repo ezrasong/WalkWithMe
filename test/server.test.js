@@ -27,6 +27,35 @@ test('guardian sees neither route nor origin before an alert, even with a valid 
   const alert = await f.request(url, { token: s.guardianToken });
   assert.equal(alert.body.phase, 'alert'); assert.equal(alert.body.trail.phoneSteps, 1); assert.equal(alert.body.origin, 'Private entrance'); assert.ok(alert.body.alertSeenAt);
 });
+test('AR evidence is read-only, guardian/owner scoped, alert-only and revoked immediately', async t => {
+  const f = await fixture(t), s = await f.create(), url = `/api/sessions/${s.id}`;
+  const read = token => f.request(`${url}/ar`, { token });
+  assert.equal((await read(s.guardianToken)).status, 409);
+  assert.equal((await read(s.watchToken)).status, 401);
+  assert.equal((await read()).status, 401);
+  await f.request(`${url}/events`, { token: s.ownerToken, body: { events: [{
+    id: 'ar-actual-fix', seq: 1, source: 'phone', type: 'gps', at: f.time(), fixAt: f.time(),
+    latitude: 43, longitude: -79, accuracy: 8, provider: 'gps', provenance: 'device-gnss'
+  }] } });
+  f.jump(8000);
+  const result = await read(s.guardianToken);
+  assert.equal(result.status, 200); assert.equal(result.body.frame.anchor.id, 'ar-actual-fix');
+  assert.equal(result.body.frame.cameraAligned, false); assert.equal(result.body.guidanceAllowed, false);
+  const before = f.app.store.get(s.id), activity = f.app.store.activity(s.id);
+  assert.equal((await f.request(`${url}/ar`, { token: s.ownerToken, body: {} })).status, 405);
+  await read(s.ownerToken);
+  assert.deepEqual(f.app.store.get(s.id), before); assert.deepEqual(f.app.store.activity(s.id), activity);
+  await f.request(`${url}/revoke-guardian`, { token: s.ownerToken, body: { confirm: true } });
+  assert.equal((await read(s.guardianToken)).status, 401);
+  await f.request(`${url}/resolve`, { token: s.ownerToken, body: { confirm: true } });
+  assert.equal((await read(s.ownerToken)).status, 409);
+  await f.request(url, { token: s.ownerToken, method: 'DELETE' });
+  assert.equal((await read(s.ownerToken)).status, 404);
+});
+test('AR is unavailable for expired sessions even when geographic evidence existed', async t => {
+  const f = await fixture(t), s = await f.create(); f.jump(8 * 3600000);
+  assert.equal((await f.request(`/api/sessions/${s.id}/ar`, { token: s.guardianToken })).status, 401);
+});
 test('authorization is scoped: guardian cannot cancel, watch cannot read trail or spoof phone readings', async t => {
   const f = await fixture(t), s = await f.create(), url = `/api/sessions/${s.id}`;
   assert.equal((await f.request(url)).status, 401);

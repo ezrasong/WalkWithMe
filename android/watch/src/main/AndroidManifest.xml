@@ -13,7 +13,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
   <application android:label="KAZE Watch" android:icon="@drawable/kaze_icon" android:dataExtractionRules="@xml/data_extraction_rules" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:usesCleartextTraffic="${cleartextAllowed}">
     <meta-data android:name="com.google.android.wearable.standalone" android:value="false" />
-    <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
+    <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
     <service android:name=".WatchService" android:exported="false" android:foregroundServiceType="location|specialUse"><property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-armed personal-safety monitoring: pressure and motion context plus unanswered check-in reminders." /></service>
     <service android:name=".PairingListener" android:exported="true"><intent-filter><action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED"/><data android:scheme="wear" android:host="*" android:pathPrefix="/kaze/"/></intent-filter></service>
   </application>

@@ -28,6 +28,8 @@ Pair the watch with the phone using its companion app. Start a session in KAZE o
 
 The watch relays through the phone over Bluetooth. Watch Wi-Fi is optional when the paired phone can reach the backend. Reopen KAZE to resume after a force-stop; reopening does not reset the check-in deadline.
 
+An active session publishes a Wear OS Ongoing Activity to keep KAZE available when waking the watch and provide a watch-face return shortcut. Manually opening another app or the watch face remains under the user's control. This does not keep the display at full brightness or disable power management. See [Wear OS ongoing activities](https://developer.android.com/training/wearables/notifications/ongoing-activity).
+
 ## iPhone
 
 On a Mac with Flutter and Xcode:
@@ -54,8 +56,10 @@ Install updates over the existing app using the same signing key. Do not uninsta
 
 ## Sessions
 
-Enter the backend HTTPS address on the wearer's phone, choose timing and start a session. Copy the guardian link from Settings to the guardian's phone. Trails are shared after nonresponse unless live sharing was enabled separately.
+Choose timing and start a session on the wearer's phone. The HTTPS service address is built into the app and inherited automatically by the watch. Copy the guardian link from Settings to the guardian's phone. Invitations for another server are rejected before sending credentials. Trails are shared after nonresponse unless live sharing was enabled separately.
 
 Keep the guardian app open to receive updates. Check-ins require server confirmation. An acknowledgment does not end the session.
 
 See [network setup](PC_BACKEND.md) for remote access.
+
+For developer builds only, use `flutter build apk --debug --dart-define=KAZE_BASE_URL=https://your-service.example` (or the same define on the iOS build). The default is in `lib/backend.dart`; end users do not configure it. Release builds require HTTPS. App credentials stay in secure/app-private storage, backups are excluded, authenticated redirects are disabled, and server roles, consent, expiry and revocation still apply. A temporary Quick Tunnel address is for development; a stable named hostname is needed for normal distribution.
