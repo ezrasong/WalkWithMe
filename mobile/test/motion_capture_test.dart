@@ -10,7 +10,7 @@ void main() {
   late SessionController session;
   late List<String> calls;
   late Map? startOptions;
-  late bool recording, available;
+  late bool recording, available, automatic;
   SessionAccess access(String role) => SessionAccess(
     baseUrl: 'https://test.example',
     id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
@@ -22,6 +22,7 @@ void main() {
     startOptions = null;
     recording = false;
     available = false;
+    automatic = false;
     session = SessionController();
     session.access = access('owner');
     session.received = DateTime.now();
@@ -45,6 +46,9 @@ void main() {
         return {
           'recording': recording,
           'available': available,
+          'automatic': automatic,
+          'streaming': startOptions?['streaming'] ?? true,
+          'cellular': startOptions?['cellular'] ?? true,
           'status': 'Local capture status',
         };
       }
@@ -91,7 +95,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(calls, contains('startMotionCapture'));
       expect(recording, true);
-      expect(startOptions, {'streaming': true, 'cellular': false});
+      expect(startOptions, {'streaming': true, 'cellular': true});
       await tester.tap(find.text('Stop capture'));
       await tester.pumpAndSettle();
       expect(calls, contains('stopMotionCapture'));
@@ -148,7 +152,7 @@ void main() {
     tester,
   ) async {
     await open(tester);
-    await tester.tap(find.text('Automatic backend evaluation'));
+    await tester.tap(find.text('Evaluate a manual capture on the backend'));
     await tester.pumpAndSettle();
     expect(find.text('Allow cellular data'), findsNothing);
     await tester.tap(find.text('Start 3-minute capture'));
@@ -156,4 +160,20 @@ void main() {
     expect(startOptions, {'streaming': false, 'cellular': false});
     await close(tester);
   });
+  testWidgets(
+    'automatic streaming is shown as running and can be stopped for the session',
+    (tester) async {
+      automatic = true;
+      recording = true;
+      await open(tester);
+      expect(find.text('Stop streaming for this session'), findsOneWidget);
+      await tester.tap(find.text('Start 3-minute capture'));
+      expect(calls, isNot(contains('startMotionCapture')));
+      await tester.tap(find.text('Stop streaming for this session'));
+      await tester.pumpAndSettle();
+      expect(calls, contains('stopMotionCapture'));
+      expect(recording, false);
+      await close(tester);
+    },
+  );
 }

@@ -1,6 +1,6 @@
 // Loopback-only, in-memory service for the iOS guardian integration tests.
 // Exercises the real API with synthetic observations; never use for real sessions.
-import { createApp } from '../src/server.js';
+import { createApp } from '../../src/server.js';
 
 let offset = 0;
 let offline = false;

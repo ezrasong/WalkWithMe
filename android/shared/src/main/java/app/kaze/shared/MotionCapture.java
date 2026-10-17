@@ -8,7 +8,7 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Phone-only, explicitly started three-minute capture with optional bounded streaming. */
+/** Session-long phone streaming by default; optional three-minute private capture. */
 public final class MotionCapture implements SensorEventListener {
     private final Context context;
     private final SensorManager manager;
@@ -16,6 +16,8 @@ public final class MotionCapture implements SensorEventListener {
     private Handler handler;
     private MotionLog log;
     private MotionStream stream;
+    private boolean automatic, automaticAttempted;
+    private long samples;
     private static volatile boolean running;
     private final float[] quaternion = new float[4];
 
@@ -31,6 +33,9 @@ public final class MotionCapture implements SensorEventListener {
         if (!running) new File(directory(c), "motion.csv.partial").delete();
         var result = new HashMap<String,Object>();
         result.put("recording", running);
+        result.put("automatic", Config.prefs(c).getBoolean("motionAutomatic", false));
+        result.put("streaming", Config.prefs(c).getBoolean("motionStreaming", false));
+        result.put("cellular", Config.prefs(c).getBoolean("motionCellular", false));
         result.put("available", new File(directory(c), "motion.csv").isFile());
         result.put("status", Config.prefs(c).getString("motionStatus", "Ready for a local motion capture."));
         result.put("streamStatus", Config.prefs(c).getString("motionStreamStatus", ""));
@@ -44,10 +49,25 @@ public final class MotionCapture implements SensorEventListener {
             File file = new File(directory(c), name);
             if (file.exists() && !file.delete()) throw new IllegalStateException("Motion capture could not be deleted");
         }
-        Config.prefs(c).edit().remove("motionStreamStatus").remove("motionResult").remove("motionSentBytes").apply();
+        Config.prefs(c).edit().remove("motionStreamStatus").remove("motionResult").remove("motionSentBytes")
+            .remove("motionAutomatic").remove("motionStreaming").remove("motionCellular").apply();
     }
 
+    public synchronized void startAutomatic(Config config) {
+        if (config.watch || automaticAttempted || running || thread != null
+            || config.id.equals(Config.prefs(context).getString("motionStoppedSession", ""))) return;
+        automaticAttempted = true;
+        try { start(config, true, true, false); }
+        catch (Exception e) { message(context, "Motion streaming unavailable. Safety recording continues."); }
+    }
+    public synchronized void stopForSession(Config config) {
+        Config.prefs(context).edit().putString("motionStoppedSession", config.id).apply();
+        stop("user-stopped");
+    }
     public synchronized void start(Config config, boolean streaming, boolean cellular) throws Exception {
+        start(config, streaming, cellular, true);
+    }
+    private void start(Config config, boolean streaming, boolean cellular, boolean localCapture) throws Exception {
         if (running || thread != null) throw new IllegalStateException("Motion capture already running");
         long expiry = Config.prefs(context).getLong("expiresAt", 0);
         if (config.watch || !Config.prefs(context).getBoolean("active", false) || expiry <= Transport.serverNow(context))
@@ -66,7 +86,10 @@ public final class MotionCapture implements SensorEventListener {
             .put("requestedHz", 200).put("frame", "Android-game-rotation-z-up-yaw-unknown")
             .put("accelSensor", accel.getType()).put("gyroSensor", gyro.getType())
             .put("rotationSensor", rotation.getType()).put("accelerationUnits", "m/s^2-including-gravity").put("angularRateUnits", "rad/s");
-        log = new MotionLog(directory(context), start, metadata);
+        log = localCapture ? new MotionLog(directory(context), start, metadata) : null;
+        automatic = !localCapture; samples = 0;
+        Config.prefs(context).edit().putBoolean("motionAutomatic", automatic).putBoolean("motionStreaming", streaming)
+            .putBoolean("motionCellular", streaming && cellular).apply();
         thread = new HandlerThread("kaze-motion-capture"); thread.start(); handler = new Handler(thread.getLooper());
         running = true;
         try {
@@ -82,17 +105,24 @@ public final class MotionCapture implements SensorEventListener {
             for (Sensor sensor : new Sensor[]{accel,gyro,rotation}) {
                 if (!manager.registerListener(this, sensor, 5000, 0, handler)) throw new IllegalStateException("Motion sensor could not start");
             }
-            handler.postDelayed(() -> stop("duration-limit"), 180000);
+            if (localCapture) handler.postDelayed(() -> stop("duration-limit"), 180000);
             handler.postDelayed(new Runnable() { @Override public void run() {
                 synchronized (MotionCapture.this) {
-                    if (!running || log == null) return;
-                    try { log.flush(); message(context, "Capturing local motion: " + log.samples() + " samples. Stops after 3 minutes."); }
+                    if (!running) return;
+                    if (!Config.prefs(context).getBoolean("active", false)
+                        || Transport.serverNow(context) >= Config.prefs(context).getLong("expiresAt", 0)) { stop("session-ended"); return; }
+                    try {
+                        if (log != null) log.flush();
+                        message(context, automatic ? "Automatic motion streaming active · Wi-Fi or cellular. No raw capture saved."
+                            : "Capturing local motion: " + samples + " samples. Stops after 3 minutes.");
+                    }
                     catch (Exception e) { stop("storage-error"); return; }
                     handler.postDelayed(this, 1000);
                 }
             } }, 1000);
-            message(context, "Capturing local motion. Stops after 3 minutes.");
-        } catch (Exception e) { stop("sensor-start-failed"); delete(context); throw e; }
+            message(context, automatic ? "Automatic motion streaming active · Wi-Fi or cellular. No raw capture saved."
+                : "Capturing local motion. Stops after 3 minutes.");
+        } catch (Exception e) { stop("sensor-start-failed"); if (localCapture) delete(context); throw e; }
     }
 
     public synchronized void stop(String reason) {
@@ -102,7 +132,8 @@ public final class MotionCapture implements SensorEventListener {
         if (handler != null) handler.removeCallbacksAndMessages(null);
         try {
             if (log != null) log.finish(reason);
-            message(context, reason.equals("user-stopped") || reason.equals("duration-limit") || reason.equals("service-stopped")
+            message(context, automatic ? "Automatic motion streaming stopped."
+                : reason.equals("user-stopped") || reason.equals("duration-limit") || reason.equals("service-stopped")
                 ? "Local motion capture ready for private export."
                 : "Motion capture ended with an error. Delete it and try again.");
         }
@@ -114,7 +145,7 @@ public final class MotionCapture implements SensorEventListener {
         }
     }
     @Override public synchronized void onSensorChanged(SensorEvent e) {
-        if (!running || log == null) return;
+        if (!running || thread == null) return;
         try {
             String kind;
             float[] values = e.values;
@@ -126,8 +157,10 @@ public final class MotionCapture implements SensorEventListener {
                     values = new float[]{quaternion[1],quaternion[2],quaternion[3],quaternion[0]}; break;
                 default: return;
             }
-            if (!log.sample(e.timestamp, kind, values)) stop("duration-limit");
-            else if (stream != null) stream.sample(e.timestamp, kind, values);
+            MotionLog.validate(kind, values);
+            if (log != null && !log.sample(e.timestamp, kind, values)) { stop("duration-limit"); return; }
+            samples++;
+            if (stream != null) stream.sample(e.timestamp, kind, values);
         } catch (Exception e2) { stop("storage-or-sensor-error"); }
     }
     @Override public void onAccuracyChanged(Sensor sensor,int accuracy) {}

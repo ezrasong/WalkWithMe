@@ -154,7 +154,7 @@ def load_model():
     for name in ('model_resnet1d.py', 'ronin_resnet.zip'):
         path = ROOT / name
         if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != ASSETS[name][1]:
-            raise ValueError('Missing or changed model asset; run scripts/motion/setup.py')
+            raise ValueError('Missing or changed model asset; run src/motion/setup.py')
     spec = importlib.util.spec_from_file_location('kaze_pinned_resnet', ROOT / 'model_resnet1d.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -442,7 +442,7 @@ class _SessionScreenState extends State<SessionScreen>
             value: consent,
             onChanged: (v) => setState(() => consent = v!),
             title: const Text(
-              'I agree to record this session on my phone and paired watch, and share its trail after nonresponse with my chosen guardian. Data expires after 8 hours.',
+              'I agree to record this session on my phone and paired watch, send compressed phone motion over Wi-Fi or cellular for trail evaluation, and share its trail after nonresponse with my chosen guardian. Motion streaming can be stopped in Settings. Data expires after 8 hours.',
             ),
           ),
           CheckboxListTile.adaptive(
@@ -899,7 +899,7 @@ class _SessionScreenState extends State<SessionScreen>
                   builder: (_) => MotionCapturePage(session: c),
                 ),
               ),
-              subtitle: 'Optional capture and Wi-Fi streaming for a walking test.',
+              subtitle: 'Automatic motion streaming and optional private capture.',
             ),
         ]),
         section('Appearance', [

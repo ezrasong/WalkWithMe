@@ -10,10 +10,10 @@ Requires Node.js 22.13 or newer.
 
 ```powershell
 npm.cmd install
-powershell -ExecutionPolicy Bypass -File scripts/start-online.ps1
+npm.cmd start
 ```
 
-The app contains its HTTPS service address; users do not enter a backend URL. The launcher runs the backend and a Cloudflare tunnel; keep it running while using KAZE. Its temporary address changes when the tunnel restarts. For developer builds, set `KAZE_BASE_URL` at build time to match that address; use a stable named HTTPS hostname before distributing the app.
+The app contains its HTTPS service address; users do not enter a backend URL. Keep the backend running while using KAZE. For access from another phone, expose it through an HTTPS tunnel or host it behind HTTPS. A temporary tunnel address changes when restarted. For developer builds, set `KAZE_BASE_URL` at build time to match that address; use a stable named HTTPS hostname before distributing the app.
 
 For local development, use `npm.cmd start` at `http://127.0.0.1:4173`. See [network setup](docs/PC_BACKEND.md).
 
@@ -33,8 +33,8 @@ cd ..
 
 Start a session on the phone, open KAZE on the paired watch, and share the guardian link from Settings. The watch uses the phone's Bluetooth connection; the phone can use Wi-Fi or cellular data.
 
-Wearer recording runs on Android. iPhone guardian flows are tested in the iOS Simulator; signed builds and physical-device verification are still needed. Run `npm run test:ios` on a configured Mac for the guardian regression suite. Keep the guardian app open; background push and emergency dispatch are not implemented.
+Wearer recording runs on Android. iPhone guardian flows are tested in the iOS Simulator; signed builds and physical-device verification are still needed. See the [iPhone regression instructions](docs/FLUTTER_MOBILE.md) for testing on a configured Mac. Keep the guardian app open; background push and emergency dispatch are not implemented.
 
 Experimental [guardian spatial AR](docs/AR_BACKEND.md) uses native ARKit/RealityKit or ARCore and a measured outdoor walking baseline to register supported recorded observations. Unknown heights, poor registration and excessive uncertainty require the map. Physical accuracy and two-phone operation still need verification. The separate compass preview remains unregistered.
 
-Optional [motion trail evaluation](docs/MOTION_EVALUATION.md) captures wearer-phone motion and streams compressed batches to the backend over Wi-Fi for a measured comparison. Cellular is off by default. It does not change shared trails or safety-session behavior.
+[Motion trail evaluation](docs/MOTION_EVALUATION.md) starts automatically with wearer sessions and sends compressed batches over Wi-Fi or cellular. It saves no raw capture by default; optional private captures support measured comparisons. It does not change shared trails or check-in behavior.

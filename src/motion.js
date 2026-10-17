@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Problem } from './domain.js';
 
-const workerPath = fileURLToPath(new URL('../scripts/motion/worker.py', import.meta.url));
+const workerPath = fileURLToPath(new URL('./motion/worker.py', import.meta.url));
 const defaultPython = path.join(homedir(), '.cache/kaze-motion/venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 
 // One cached model, one bounded request, no raw-data queue or disk persistence.
@@ -15,7 +15,7 @@ export class MotionEvaluator {
   }
   async evaluate(captureGzip) {
     if (this.busy) throw new Problem(429, 'Motion processor busy; skip this batch');
-    if (!existsSync(this.python)) throw new Problem(503, 'Motion runtime unavailable; run scripts/motion/setup.py');
+    if (!existsSync(this.python)) throw new Problem(503, 'Motion runtime unavailable; run src/motion/setup.py');
     this.busy = true;
     try {
       if (!this.child) await this.start();

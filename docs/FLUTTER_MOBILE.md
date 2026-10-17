@@ -78,12 +78,19 @@ flutter analyze
 flutter test
 cd ..
 npm test
-npm run test:ios -- SIMULATOR_UDID
+node test/ios/backend.mjs
 ```
 
-Omit the UDID to use a booted iPhone or the newest available iPhone simulator.
-The script starts a separate loopback-only service on port 4174, uses an in-memory
-database, and stops that service on exit. It requires the port to be free.
+The last command starts a separate loopback-only service on port 4174 with an in-memory database. In another terminal on a configured Mac, boot an iPhone simulator and run:
+
+```sh
+cd mobile
+flutter drive --driver=test_driver/ios_guardian.dart \
+  --target=integration_test/ios_guardian_test.dart \
+  --dart-define=KAZE_BASE_URL=http://127.0.0.1:4174 -d SIMULATOR_UDID
+```
+
+Replace `SIMULATOR_UDID` with the identifier from `xcrun simctl list devices available`. Stop the test backend with Ctrl+C when finished.
 Screenshots are saved in `artifacts/ios/screenshots/`; set
 `KAZE_IOS_EVIDENCE_DIR` to an absolute directory to retain separate device runs.
 

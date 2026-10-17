@@ -15,7 +15,7 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
   Timer? timer;
   Map status = {};
   bool busy = false, reading = false;
-  bool streaming = true, cellular = false;
+  bool streaming = true, cellular = true;
   String message = '';
   late final SessionAccess? openingAccess;
   bool get authorized =>
@@ -51,7 +51,15 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
       final value = await SessionController.native.invokeMapMethod(
         'motionStatus',
       );
-      if (mounted && authorized) setState(() => status = value ?? {});
+      if (mounted && authorized) {
+        setState(() {
+          status = value ?? {};
+          if (status['recording'] == true) {
+            streaming = status['streaming'] == true;
+            cellular = status['cellular'] == true;
+          }
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(
@@ -126,14 +134,14 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
         padding: const EdgeInsets.all(20),
         children: [
           const Text(
-            'Record up to 3 minutes of acceleration, rotation and angular motion on the wearer phone. No camera is used.',
+            'Motion streaming starts automatically with each wearer session over Wi-Fi or cellular. No raw capture is saved by default. No camera is used.',
           ),
           const SizedBox(height: 16),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Automatic backend evaluation'),
+            title: const Text('Evaluate a manual capture on the backend'),
             subtitle: const Text(
-              'Send compressed batches every 10 seconds while capturing. Raw uploads are processed in memory.',
+              'Compressed motion batches are sent every 10 seconds and processed in memory. Stop streaming below before starting an optional 3-minute private capture.',
             ),
             value: streaming,
             onChanged: authorized && !busy && status['recording'] != true
@@ -145,7 +153,7 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Allow cellular data'),
               subtitle: const Text(
-                'Off by default: unmetered Wi-Fi only. Failed batches are skipped without retries or a backlog.',
+                'On by default. Turn off before a manual capture for unmetered Wi-Fi only. Failed batches are skipped without retries or a backlog.',
               ),
               value: cellular,
               onChanged: authorized && !busy && status['recording'] != true
@@ -186,7 +194,11 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
             onPressed: authorized && !busy && status['recording'] == true
                 ? () => run('stopMotionCapture')
                 : null,
-            child: const Text('Stop capture'),
+            child: Text(
+              status['automatic'] == true
+                  ? 'Stop streaming for this session'
+                  : 'Stop capture',
+            ),
           ),
           TextButton(
             onPressed:
@@ -200,11 +212,11 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'A local copy stays on this phone until the safety session ends or expires. Export before ending the session. Streaming stops with capture; it does not restart automatically.',
+            'Automatic streaming lasts until the session ends or expires. Stopping it here keeps it off for this session, including after a restart. A new wearer session starts streaming again. Cellular is allowed by default.',
           ),
           const SizedBox(height: 16),
           const Text(
-            'Each batch estimates a separate relative motion segment. Accuracy is unverified. Shared locations, guardian guidance and check-in deadlines are unchanged. You can leave this screen while capturing.',
+            'Optional manual captures keep a local copy for up to 3 minutes; export it before ending the safety session. Each batch estimates separate relative motion. Accuracy is unverified. Shared locations, guardian guidance and check-in deadlines are unchanged.',
           ),
         ],
       ),

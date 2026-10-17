@@ -33,10 +33,13 @@ final class MotionLog implements Closeable {
         if (closed) return false;
         if (t < start) return true; // Ignore a cached sensor callback from before consent.
         if (t - start > MAX_NANOS) return false;
+        validate(sensor, values);
+        write(row(t, sensor, values)); samples++; return true;
+    }
+    static void validate(String sensor, float[] values) throws IOException {
         int needed = sensor.equals("rotation") ? 4 : 3;
         if (values.length < needed) throw new IOException("Incomplete motion observation");
         for (float v : values) if (!Float.isFinite(v)) throw new IOException("Invalid motion observation");
-        write(row(t, sensor, values)); samples++; return true;
     }
     static String row(long t, String sensor, float[] values) {
         StringBuilder row = new StringBuilder().append(t).append(',').append(sensor);

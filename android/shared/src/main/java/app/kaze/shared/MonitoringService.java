@@ -98,7 +98,7 @@ public abstract class MonitoringService extends Service implements SensorRecorde
             try { motion.start(config, intent.getBooleanExtra("streaming", false), intent.getBooleanExtra("cellular", false)); }
             catch (Exception e) { Config.prefs(this).edit().putString("motionStatus", e.getMessage()).apply(); }
         }
-        if ("app.kaze.STOP_MOTION".equals(action) && motion != null) motion.stop("user-stopped");
+        if ("app.kaze.STOP_MOTION".equals(action) && motion != null) motion.stopForSession(config);
         if (REFRESH.equals(action)) worker.execute(this::sync);
         if (RESPOND.equals(action) || END.equals(action)) worker.execute(() -> {
             try {
@@ -125,6 +125,7 @@ public abstract class MonitoringService extends Service implements SensorRecorde
             JSONObject result = Transport.send(this, config, "", null);
             Transport.saveClock(this, result, started);
             if ("resolved".equals(result.optString("phase"))) { status("Session ended. Recording stopped; queued readings deleted."); stopConfirmed(); return; }
+            if (motion != null) motion.startAutomatic(config);
             if (Transport.serverNow(this) - lastHeartbeat > 15000) {
                 lastHeartbeat = Transport.serverNow(this);
                 Intent battery = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
