@@ -25,9 +25,9 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
     <key>NSCameraUsageDescription</key>
-    <string>Only an optional guardian direction preview uses the camera. KAZE does not record or upload camera footage.</string>
+    <string>Optional guardian spatial AR and direction preview process the camera on this phone. KAZE does not record or upload footage.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Compare your guardian position with the last shared location for an approximate outdoor direction cue.</string>
+    <string>Register the guardian AR camera against recorded locations using precise outdoor movement, or show an approximate direction cue.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Connect to your private KAZE server hosted on your PC.</string>
     <key>LSRequiresIPhoneOS</key>

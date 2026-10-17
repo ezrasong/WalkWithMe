@@ -33,6 +33,6 @@ cd ..
 
 Start a session on the phone, open KAZE on the paired watch, and share the guardian link from Settings. The watch uses the phone's Bluetooth connection; the phone can use Wi-Fi or cellular data.
 
-Wearer recording runs on Android. The iPhone guardian build still needs device verification. Keep the guardian app open; background push and emergency dispatch are not implemented. Camera guidance is an experimental compass preview.
+Wearer recording runs on Android. The iPhone guardian build still needs Mac/Xcode and device verification. Keep the guardian app open; background push and emergency dispatch are not implemented.
 
-The [guardian AR backend](docs/AR_BACKEND.md) now prepares source-aware geographic frames and uncertainty-preserving recorded paths. Camera registration and a spatial AR renderer remain pending.
+Experimental [guardian spatial AR](docs/AR_BACKEND.md) uses native ARKit/RealityKit or ARCore and a measured outdoor walking baseline to register supported recorded observations. Unknown heights, poor registration and excessive uncertainty require the map. Physical accuracy and two-phone operation still need verification. The separate compass preview remains unregistered.

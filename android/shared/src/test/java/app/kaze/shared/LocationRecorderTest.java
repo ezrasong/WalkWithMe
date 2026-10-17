@@ -24,6 +24,13 @@ public class LocationRecorderTest {
   Config.prefs(c).edit().putLong("createdAt",System.currentTimeMillis()+10000).commit();Location l=new Location("gps");l.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
   assertNull(LocationRecorder.evidence(c,config(false),l));
  }
+ @Test public void androidAltitudeIsExplicitlyEllipsoidalAndMissingHeightStaysAbsent()throws Exception{
+  Location l=new Location("gps");l.setAccuracy(2);l.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
+  assertFalse(LocationRecorder.evidence(c,config(false),l).has("altitudeDatum"));
+  l.setAltitude(100);l.setVerticalAccuracyMeters(2);
+  JSONObject e=LocationRecorder.evidence(c,config(false),l);
+  assertEquals("WGS84-ellipsoid",e.getString("altitudeDatum"));assertEquals(100,e.getDouble("altitude"),0);
+ }
  @Test public void deniedLocationAndStoppedCallbacksDoNotGenerateCoordinates()throws Exception{
   final int[] count={0};LocationRecorder r=new LocationRecorder(c,config(false),(source,event)->count[0]++);r.start();r.stop();Location l=new Location("gps");l.setAccuracy(5);r.onLocationChanged(l);assertEquals(0,count[0]);
  }

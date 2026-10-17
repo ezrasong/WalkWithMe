@@ -24,3 +24,11 @@ test('location boundary validates fix clock, source, accuracy, metadata and watc
  assert.throws(()=>validateEvent(gps('phone',2000),s,'watch',3000));
  assert.equal(geographicTrail([],3000).latest,null);
 });
+
+test('altitude datum is explicit and legacy retry payloads remain unchanged',()=>{
+ const s={createdAt:1000}, e=gps('phone',2000,{altitude:100,verticalAccuracy:2});
+ assert.equal('altitudeDatum' in validateEvent(e,s,'owner',3000),false);
+ assert.equal(validateEvent({...e,altitudeDatum:'WGS84-ellipsoid'},s,'owner',3000).altitudeDatum,'WGS84-ellipsoid');
+ assert.throws(()=>validateEvent({...e,altitudeDatum:'MSL'},s,'owner',3000));
+ assert.throws(()=>validateEvent({...e,altitude:undefined,altitudeDatum:'WGS84-ellipsoid'},s,'owner',3000));
+});

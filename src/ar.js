@@ -38,6 +38,7 @@ export function guardianArTrail(events, now) {
     fixAt: anchorFix.fixAt, source: anchorFix.source, accuracy: anchorFix.accuracy,
     altitude: verticalUsable(anchorFix) ? anchorFix.altitude : null,
     verticalAccuracy: verticalUsable(anchorFix) ? anchorFix.verticalAccuracy : null };
+  anchor.altitudeDatum = anchorFix.altitudeDatum ?? null;
   const paths = [];
   let omitted = 0, included = 0;
   for (const path of geography.paths) {
@@ -51,6 +52,7 @@ export function guardianArTrail(events, now) {
         y: heightKnown ? fix.altitude - anchor.altitude : null,
         horizontalAccuracy: fix.accuracy, relativeHorizontalUncertainty: fix.accuracy + anchor.accuracy,
         verticalUncertainty: heightKnown ? fix.verticalAccuracy + anchor.verticalAccuracy : null,
+        altitudeDatum: heightKnown && fix.altitudeDatum === anchor.altitudeDatum ? fix.altitudeDatum ?? null : null,
         provider: fix.provider, provenance: fix.provenance });
       included++;
     }

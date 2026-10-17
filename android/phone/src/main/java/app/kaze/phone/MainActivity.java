@@ -22,11 +22,36 @@ import java.util.concurrent.Executors;
 // Flutter owns phone UI; the native service owns durable recording and reminders.
 public final class MainActivity extends FlutterActivity {
     private MethodChannel.Result permissionResult;
+    private MethodChannel.Result arPermissionResult;
     private final java.util.concurrent.ExecutorService worker = Executors.newSingleThreadExecutor();
     @Override public void configureFlutterEngine(FlutterEngine engine) {
         super.configureFlutterEngine(engine);
+        engine.getPlatformViewsController().getRegistry().registerViewFactory("app.kaze/guardian-ar",
+            new io.flutter.plugin.platform.PlatformViewFactory(io.flutter.plugin.common.StandardMessageCodec.INSTANCE) {
+                @Override public io.flutter.plugin.platform.PlatformView create(android.content.Context context, int id, Object args) {
+                    return new GuardianArView(MainActivity.this, id, engine.getDartExecutor().getBinaryMessenger());
+                }
+            });
         new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), "app.kaze/session").setMethodCallHandler((call, result) -> {
             switch (call.method) {
+                case "prepareGuardianAr": {
+                    if (Config.prefs(this).getBoolean("active", false)) { result.success("End wearer recording before using a guardian camera."); break; }
+                    if (arPermissionResult != null || permissionResult != null) { result.success("Permission request pending."); break; }
+                    try {
+                        if (!com.google.ar.core.ArCoreApk.getInstance().checkAvailability(this).isSupported()) { result.success("ARCore unsupported or still checking. Use the map."); break; }
+                        if (com.google.ar.core.ArCoreApk.getInstance().requestInstall(this, true) != com.google.ar.core.ArCoreApk.InstallStatus.INSTALLED) {
+                            result.success("ARCore install requested. Reopen AR after installation."); break;
+                        }
+                        ArrayList<String> needed = new ArrayList<>();
+                        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.CAMERA);
+                        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                            needed.add(Manifest.permission.ACCESS_FINE_LOCATION); needed.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+                        }
+                        if (needed.isEmpty()) result.success("ready");
+                        else { arPermissionResult = result; requestPermissions(needed.toArray(new String[0]), 8); }
+                    } catch (Exception e) { result.success("ARCore unavailable. Use the map."); }
+                    break;
+                }
                 case "permissions": requestRecordingPermissions(result); break;
                 case "setupStatus": {
                     var state = new HashMap<String,Object>();
@@ -89,6 +114,11 @@ public final class MainActivity extends FlutterActivity {
     @Override public void onRequestPermissionsResult(int r, String[] p, int[] grants) {
         super.onRequestPermissionsResult(r, p, grants);
         if (r == 7 && permissionResult != null) { permissionResult.success(null); permissionResult = null; }
+        if (r == 8 && arPermissionResult != null) {
+            arPermissionResult.success(checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ? "ready" : "Camera and precise location permission required. Use the map.");
+            arPermissionResult = null;
+        }
     }
-    @Override public void onDestroy() { worker.shutdownNow(); if (permissionResult != null) { permissionResult.error("closed", "Screen closed during permissions", null); permissionResult = null; } super.onDestroy(); }
+    @Override public void onDestroy() { worker.shutdownNow(); if (permissionResult != null) { permissionResult.error("closed", "Screen closed during permissions", null); permissionResult = null; } if (arPermissionResult != null) { arPermissionResult.success("Screen closed during permissions."); arPermissionResult = null; } super.onDestroy(); }
 }

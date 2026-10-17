@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'session.dart';
 import 'direction_preview.dart';
+import 'guardian_ar.dart';
 import 'device_setup.dart';
 import 'trail_map.dart';
 export 'trail_map.dart';
@@ -752,6 +753,14 @@ class _SessionScreenState extends State<SessionScreen>
                     ),
                     icon: const Icon(Icons.directions),
                     label: const Text('Directions to last point'),
+                  ),
+                if (p != null)
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => GuardianAr(session: c)),
+                    ),
+                    icon: const Icon(Icons.view_in_ar),
+                    label: const Text('Guardian spatial AR'),
                   ),
                 if (p != null)
                   OutlinedButton.icon(

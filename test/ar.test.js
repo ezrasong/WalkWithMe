@@ -55,3 +55,13 @@ test('late earlier observations change the explicit anchor ID so clients must re
   assert.notEqual(a.frame.anchor.id, b.frame.anchor.id);
   assert.equal(b.frame.registrationRequired, true);
 });
+
+test('AR reports a compatible altitude datum only when both observed heights declare it', () => {
+  const a = guardianArTrail([gps('phone', 1000, { altitude: 100, verticalAccuracy: 1, altitudeDatum: 'WGS84-ellipsoid' }),
+    gps('phone', 2000, { altitude: 101, verticalAccuracy: 1, altitudeDatum: 'WGS84-ellipsoid' }),
+    gps('phone', 3000, { altitude: 102, verticalAccuracy: 1 })], 4000);
+  assert.equal(a.frame.anchor.altitudeDatum, 'WGS84-ellipsoid');
+  assert.equal(a.paths[0].points[1].altitudeDatum, 'WGS84-ellipsoid');
+  assert.equal(a.paths[0].points[2].altitudeDatum, null);
+  assert.equal(a.guidanceAllowed, false);
+});

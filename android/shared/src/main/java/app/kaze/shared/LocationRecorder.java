@@ -50,7 +50,7 @@ public final class LocationRecorder implements LocationListener {
             .put("latitude", location.getLatitude()).put("longitude", location.getLongitude()).put("accuracy", location.getAccuracy())
             .put("provider", provider).put("provenance", "gps".equals(provider) ? "device-gnss" : config.watch ? "possibly-phone-derived" : "unknown")
             .put("mock", location.isFromMockProvider());
-        if (location.hasAltitude()) event.put("altitude", location.getAltitude());
+        if (location.hasAltitude()) event.put("altitude", location.getAltitude()).put("altitudeDatum", "WGS84-ellipsoid");
         if (location.hasVerticalAccuracy()) event.put("verticalAccuracy", location.getVerticalAccuracyMeters());
         return event;
     }

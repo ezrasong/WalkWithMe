@@ -81,6 +81,10 @@ export function validateEvent(input, session, role, now) {
         e.mock = input.mock;
       }
       if (input.altitude != null) e.altitude = number(input.altitude, -1500, 30000, 'altitude');
+      if (input.altitudeDatum != null) {
+        if (input.altitudeDatum !== 'WGS84-ellipsoid' || e.altitude == null) throw new Problem(400, 'Invalid altitude datum');
+        e.altitudeDatum = input.altitudeDatum;
+      }
       if (input.verticalAccuracy != null) e.verticalAccuracy = number(input.verticalAccuracy, 0, 100000, 'vertical accuracy');
       break;
     default: throw new Problem(400, 'Unknown event type');
