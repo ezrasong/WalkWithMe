@@ -32,19 +32,68 @@ An active session publishes a Wear OS Ongoing Activity to keep KAZE available wh
 
 ## iPhone
 
-On a Mac with Flutter and Xcode:
+On a Mac, install Xcode, CocoaPods and Flutter (Dart 3.13.5 or newer). Complete
+Xcode's first-launch setup and install its matching iOS simulator runtime under
+**Xcode → Settings → Components**. Check the toolchain with `flutter doctor -v`.
+The iOS project uses Swift packages plus CocoaPods for the compass plugin.
+
+For a local simulator, run the backend from the repository root in one terminal:
+
+```sh
+npm ci
+npm start
+```
+
+In another terminal:
+
+```sh
+cd mobile
+flutter pub get
+flutter run -d 'iPhone 17 Pro' --dart-define=KAZE_BASE_URL=http://127.0.0.1:4173
+```
+
+The iOS simulator can reach the Mac at `127.0.0.1`. A physical iPhone needs a
+reachable HTTPS service address. Guardian invitations must match the service
+compiled into the app. For a physical iPhone build:
 
 ```sh
 git clone --branch kaze-flutter-verification https://github.com/ezrasong/htv11.git
 cd htv11/mobile
 flutter pub get
-flutter build ios --debug --no-codesign
+flutter build ios --debug --no-codesign --dart-define=KAZE_BASE_URL=https://your-service.example
 open ios/Runner.xcworkspace
 ```
 
 In Xcode, select Runner, your signing team and the connected iPhone, then run. Enable iPhone Developer Mode if requested.
 
-Join as guardian using the link copied from the wearer's phone. Background wearer recording currently runs on Android. The iPhone build and permission flow still need device verification.
+Join as guardian using the link copied from the wearer's phone. Background wearer recording currently runs on Android. Signed builds and real-device permissions still need physical iPhone verification.
+
+### iOS simulator regression suite
+
+From the repository root:
+
+```sh
+cd mobile
+flutter analyze
+flutter test
+cd ..
+npm test
+npm run test:ios -- SIMULATOR_UDID
+```
+
+Omit the UDID to use a booted iPhone or the newest available iPhone simulator.
+The script starts a separate loopback-only service on port 4174, uses an in-memory
+database, and stops that service on exit. It requires the port to be free.
+Screenshots are saved in `artifacts/ios/screenshots/`; set
+`KAZE_IOS_EVIDENCE_DIR` to an absolute directory to retain separate device runs.
+
+The suite uses synthetic observations against the real API to check first launch,
+invitation validation, private versus live sharing, missed check-ins, map controls,
+guardian acknowledgment and arrival, unsupported AR fallback, appearance and
+keychain restoration, offline recovery, revocation, deletion, expiry, landscape,
+large text, licenses and link removal. It does not measure GPS or compass accuracy,
+camera rendering, AR registration, background delivery or paired-watch behavior.
+ARKit world tracking and the camera require physical devices.
 
 During an active assistance request, **Guardian spatial AR** requests camera and precise foreground location on the guardian phone. Use a safe outdoor area with space for a 30–100 m walking registration baseline; weak locations or missing compatible heights return to the map. It displays supported recorded observations with uncertainty, without route/floor/obstacle guidance. Camera processing stays local. See [registration and verification limits](AR_BACKEND.md). The iPhone 17/iOS 26.6.2 target still needs a signed Xcode run and physical testing; Windows Android tests cannot verify it.
 

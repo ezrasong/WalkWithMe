@@ -83,6 +83,11 @@ ThemeData kazeTheme(Brightness brightness) {
   );
   return ThemeData(
     colorScheme: colors,
+    cupertinoOverrideTheme: CupertinoThemeData(
+      brightness: brightness,
+      primaryColor: colors.primary,
+      barBackgroundColor: colors.surface,
+    ),
     useMaterial3: true,
     scaffoldBackgroundColor: dark
         ? const Color(0xff101216)
@@ -664,6 +669,12 @@ class _SessionScreenState extends State<SessionScreen>
     );
   }
 
+  Future<void> openGuardianCamera(Widget screen) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    return Navigator.of(context)
+        .push<void>(MaterialPageRoute(builder: (_) => screen));
+  }
+
   Future<void> showSessionDetails() => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -756,19 +767,14 @@ class _SessionScreenState extends State<SessionScreen>
                   ),
                 if (p != null)
                   OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => GuardianAr(session: c)),
-                    ),
+                    onPressed: () => openGuardianCamera(GuardianAr(session: c)),
                     icon: const Icon(Icons.view_in_ar),
                     label: const Text('Guardian spatial AR'),
                   ),
                 if (p != null)
                   OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => DirectionPreview(session: c),
-                      ),
-                    ),
+                    onPressed: () =>
+                        openGuardianCamera(DirectionPreview(session: c)),
                     icon: const Icon(Icons.camera_alt_outlined),
                     label: const Text('Camera direction preview'),
                   ),

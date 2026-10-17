@@ -10,7 +10,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test test/*.test.js",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:ios": "bash scripts/test-ios.sh"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1"
