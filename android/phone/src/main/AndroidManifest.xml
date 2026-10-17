@@ -20,6 +20,7 @@
     <meta-data android:name="flutterEmbedding" android:value="2" />
     <meta-data android:name="com.google.ar.core" android:value="optional" />
     <service android:name="app.kaze.phone.TrailService" android:exported="false" android:foregroundServiceType="location|specialUse"><property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-armed timed safety session: location trail and check-in reminders, with a visible stop action." /></service>
+    <service android:name="app.kaze.shared.GuardianService" android:exported="false" android:foregroundServiceType="specialUse"><property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-enabled guardian monitoring for an active timed safety session, with visible status and a stop action. No guardian location recording." /></service>
     <service android:name="app.kaze.phone.PhoneRelayService" android:exported="true"><intent-filter><action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED"/><data android:scheme="wear" android:host="*" android:pathPrefix="/kaze/request"/></intent-filter></service>
   </application>
   <queries><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent></queries>

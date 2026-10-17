@@ -465,7 +465,7 @@ class _SessionScreenState extends State<SessionScreen>
           ),
         ]),
       note(
-        'No emergency dispatch, calls, SMS or push are connected. A guardian must keep the app open. The PC and its network connection must stay running.',
+        'Android guardians can enable background monitoring after joining. iPhone guardians must keep KAZE open; Apple background alerts are not connected. No emergency dispatch, calls or SMS are connected. The PC and its network connection must stay running.',
       ),
       note(
         'OpenFreeMap serves vector maps using OpenStreetMap data and receives the viewed area and IP address. You can turn the street map off in Settings.',
@@ -529,6 +529,33 @@ class _SessionScreenState extends State<SessionScreen>
   String countdown(int seconds) => seconds >= 60
       ? '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}'
       : '${seconds}s';
+
+  Widget guardianMonitoring() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (c.backgroundGuardianSupported) ...[
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Background guardian alerts'),
+          subtitle: Text(
+            c.device['status'] as String? ?? 'Off. Keep KAZE open for updates.',
+          ),
+          value: c.device['enabled'] == true,
+          onChanged: c.busy ? null : c.setGuardianMonitoring,
+        ),
+        if (c.device['enabled'] == true && c.device['running'] != true)
+          note(
+            'Android has not confirmed the monitor is running. Turn it off and on again while KAZE is open.',
+          ),
+        note(
+          'Uses a persistent Android notification and an internet connection. Battery restrictions, notification settings, force-stop or restarting the phone can interrupt delivery. Review Permissions & background setup.',
+        ),
+      ] else
+        note(
+          'iPhone guardian updates require KAZE to stay open. Apple background alerts are not connected. Signed builds and physical iPhone testing are still needed.',
+        ),
+    ],
+  );
 
   Widget mapPage() {
     final s = c.snapshot!, p = latest;
@@ -609,6 +636,21 @@ class _SessionScreenState extends State<SessionScreen>
           ),
         ),
       ],
+      if (c.guardian && phase != 'resolved')
+        if (c.backgroundGuardianSupported)
+          TextButton.icon(
+            onPressed: () => setState(() => tab = 2),
+            icon: const Icon(Icons.notifications_outlined),
+            label: Text(
+              c.device['enabled'] == true
+                  ? 'Review background guardian alerts'
+                  : 'Set up background guardian alerts',
+            ),
+          )
+        else
+          note(
+            'Keep KAZE open on iPhone. Apple background alerts are not connected.',
+          ),
     ]);
     final location = Card(
       child: ListTile(
@@ -890,6 +932,8 @@ class _SessionScreenState extends State<SessionScreen>
             subtitle: 'Location, reminders and background settings.',
           ),
         ]),
+        if (c.guardian && phase != 'resolved')
+          section('Guardian alerts', [guardianMonitoring()]),
         section('Appearance', [
           const Text('The map follows your appearance.'),
           const SizedBox(height: 12),
@@ -1021,7 +1065,7 @@ class _SessionScreenState extends State<SessionScreen>
         ]),
         section('About this prototype', [
           const Text(
-            'The guardian must keep KAZE open. Calls, SMS, background push and emergency dispatch are not connected.',
+            'Android guardians can opt into background monitoring with a persistent notification. iPhone guardians must keep KAZE open; Apple background alerts are not connected. Calls, SMS and emergency dispatch are not connected.',
           ),
           note(
             'Camera direction preview is experimental outdoor guidance. It does not identify rooms, floors or stairs.',

@@ -20,7 +20,19 @@ SessionAccess guardian() => SessionAccess(
 );
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          SessionController.native,
+          (call) async =>
+              call.method == 'guardianStatus' ? {'enabled': false} : null,
+        );
+  });
+  tearDown(
+    () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SessionController.native, null),
+  );
   test(
     'guardian invitations cannot redirect access to a different service',
     () async {

@@ -109,7 +109,11 @@ Install updates over the existing app using the same signing key. Do not uninsta
 
 Choose timing and start a session on the wearer's phone. The HTTPS service address is built into the app and inherited automatically by the watch. Copy the guardian link from Settings to the guardian's phone. Invitations for another server are rejected before sending credentials. Trails are shared after nonresponse unless live sharing was enabled separately.
 
-Keep the guardian app open to receive updates. Check-ins require server confirmation. An acknowledgment does not end the session.
+On an Android guardian, opt into **Background guardian alerts** on the session screen or in Settings. The native monitor uses a persistent notification and checks the server every five seconds after the previous request completes. It requires notifications, network access and background battery use; it does not request guardian location or motion permissions. Alerts contain no wearer name, location or private link. Open KAZE to view evidence or explicitly acknowledge. Stopping monitoring does not acknowledge or resolve the wearer's alert. Removing the guardian link also stops monitoring and removes its saved access. Expiry, revocation, deletion and session resolution stop monitoring after confirmation; known expiry is enforced locally during network loss. A stale response cannot restore a removed link. After force-stop or a phone reboot, reopen KAZE and enable monitoring again.
+
+The background monitor reads only session status. Its polling never counts as a human opening or acknowledging the request. Network errors produce a separate connection warning, not a safety alert. Notification settings, Do Not Disturb and manufacturer battery controls still apply. Physical background delivery needs a dedicated guardian-device check before relying on it.
+
+On iPhone, keep KAZE open to receive updates. Apple background push is not connected; signed builds and physical iPhone background delivery have not been verified. Calls, SMS, backup-contact escalation and emergency dispatch are not connected on either platform. Check-ins require server confirmation. An acknowledgment does not end the session.
 
 See [network setup](PC_BACKEND.md) for remote access.
 

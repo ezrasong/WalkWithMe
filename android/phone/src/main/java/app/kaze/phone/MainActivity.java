@@ -53,6 +53,20 @@ public final class MainActivity extends FlutterActivity {
                     break;
                 }
                 case "permissions": requestRecordingPermissions(result); break;
+                case "guardianPermissions": {
+                    if (permissionResult != null || arPermissionResult != null) { result.error("pending", "Permission request already open", null); break; }
+                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        permissionResult = result; requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 9);
+                    } else result.success(null);
+                    break;
+                }
+                case "guardianStatus": result.success(GuardianService.status(this)); break;
+                case "startGuardian": {
+                    try { GuardianService.enable(this, (String)call.arguments); result.success(GuardianService.status(this)); }
+                    catch (Exception e) { result.error("guardian", e.getMessage(), null); }
+                    break;
+                }
+                case "stopGuardian": GuardianService.disable(this); result.success(null); break;
                 case "setupStatus": {
                     var state = new HashMap<String,Object>();
                     state.put("locationAllowed", LocationRecorder.permitted(this));
@@ -77,6 +91,7 @@ public final class MainActivity extends FlutterActivity {
                 }
                 case "start": {
                     if (Config.prefs(this).getBoolean("active", false)) { result.error("active", "End the current recording session first", null); break; }
+                    if (GuardianService.enabled(this)) { result.error("guardian", "Stop guardian monitoring before starting wearer recording", null); break; }
                     try {
                         Config next = new Config((String)call.arguments, false);
                         worker.execute(() -> {
@@ -113,7 +128,7 @@ public final class MainActivity extends FlutterActivity {
     }
     @Override public void onRequestPermissionsResult(int r, String[] p, int[] grants) {
         super.onRequestPermissionsResult(r, p, grants);
-        if (r == 7 && permissionResult != null) { permissionResult.success(null); permissionResult = null; }
+        if ((r == 7 || r == 9) && permissionResult != null) { permissionResult.success(null); permissionResult = null; }
         if (r == 8 && arPermissionResult != null) {
             arPermissionResult.success(checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED &&
                 checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ? "ready" : "Camera and precise location permission required. Use the map.");

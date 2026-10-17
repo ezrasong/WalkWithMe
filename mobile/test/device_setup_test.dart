@@ -160,7 +160,7 @@ void main() {
         Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
         Brightness.dark,
       );
-      expect(calls.where((c) => c != 'setupStatus'), isEmpty);
+      expect(calls.where((c) => c != 'setupStatus' && c != 'stopGuardian'), isEmpty);
       await tester.pumpWidget(const SizedBox());
       debugDefaultTargetPlatformOverride = null;
     },

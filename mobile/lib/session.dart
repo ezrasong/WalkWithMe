@@ -123,6 +123,57 @@ class SessionController extends ChangeNotifier {
     : client = client ?? http.Client(),
       storage = storage ?? const FlutterSecureStorage();
   bool get guardian => access?.role == 'guardian';
+  bool get backgroundGuardianSupported =>
+      defaultTargetPlatform == TargetPlatform.android;
+  Future<void> _refreshGuardianStatus() async {
+    if (!backgroundGuardianSupported || !guardian) return;
+    final current = access;
+    final startedRevision = revision;
+    try {
+      final status = Map<String, dynamic>.from(
+        await native.invokeMapMethod('guardianStatus') ?? {},
+      );
+      if (current != access || startedRevision != revision || disposed) return;
+      device = status;
+    } catch (_) {
+      if (current != access || startedRevision != revision || disposed) return;
+      device = {'status': 'Background monitoring unavailable. Keep KAZE open.'};
+    }
+  }
+
+  Future<void> setGuardianMonitoring(bool enabled) => run(() async {
+    if (!guardian || !backgroundGuardianSupported) {
+      throw const FormatException(
+        'Background guardian alerts are available on Android only. Keep KAZE open on iPhone.',
+      );
+    }
+    if (enabled) {
+      if (snapshot == null ||
+          !['armed', 'challenge', 'alert'].contains(snapshot!['phase'])) {
+        throw const FormatException(
+          'Reconnect to an active session before enabling guardian alerts.',
+        );
+      }
+      await native.invokeMethod('guardianPermissions');
+      final a = access!;
+      await native.invokeMethod(
+        'startGuardian',
+        jsonEncode({
+          'baseUrl': a.baseUrl,
+          'id': a.id,
+          'guardianToken': a.token,
+        }),
+      );
+    } else {
+      await native.invokeMethod('stopGuardian');
+    }
+    await _refreshGuardianStatus();
+  });
+
+  Future<void> _stopGuardianMonitoring() async {
+    if (backgroundGuardianSupported) await native.invokeMethod('stopGuardian');
+  }
+
   int get serverNow => (snapshot?['serverNow'] as num?)?.toInt() == null
       ? DateTime.now().millisecondsSinceEpoch
       : (snapshot!['serverNow'] as num).toInt() +
@@ -191,6 +242,21 @@ class SessionController extends ChangeNotifier {
     } catch (_) {
       message = 'Saved access could not be restored. Reconnect using your private link.';
     }
+    if (backgroundGuardianSupported) {
+      try {
+        if (guardian) {
+          await _refreshGuardianStatus();
+          if (device['enabled'] == true && device['sessionId'] != access!.id) {
+            await _stopGuardianMonitoring();
+            await _refreshGuardianStatus();
+          }
+        } else {
+          await _stopGuardianMonitoring();
+        }
+      } catch (_) {
+        message = 'Could not confirm background guardian monitoring. Review Settings.';
+      }
+    }
     startPolling();
   }
 
@@ -233,11 +299,23 @@ class SessionController extends ChangeNotifier {
           await native.invokeMapMethod('status') ?? {},
         );
       }
+      if (guardian && backgroundGuardianSupported) {
+        if (data['phase'] == 'resolved') await _stopGuardianMonitoring();
+        await _refreshGuardianStatus();
+      }
     } catch (e) {
       if (current != access || startedRevision != revision || disposed) return;
       connection = 'PC unavailable. New readings may still be queued on the wearer’s phone. Remote evidence is unavailable.';
       if (guardian) snapshot = null;
       if (e is ApiFailure && [401, 404].contains(e.status)) {
+        try {
+          await _stopGuardianMonitoring();
+        } catch (_) {
+          /* The native monitor independently checks revocation. */
+        }
+        if (current != access || startedRevision != revision || disposed) {
+          return;
+        }
         snapshot = null;
         message = 'Access expired, deleted or revoked. Evidence cleared.';
         access = null;
@@ -261,7 +339,11 @@ class SessionController extends ChangeNotifier {
     try {
       await action();
     } catch (e) {
-      message = e is FormatException ? e.message.toString() : e.toString();
+      message = e is FormatException
+          ? e.message.toString()
+          : e is PlatformException
+          ? e.message ?? 'Could not change this setting.'
+          : e.toString();
     } finally {
       busy = false;
       changed();
@@ -279,6 +361,7 @@ class SessionController extends ChangeNotifier {
         'Use the Vivo Android phone for wearer recording. This phone can join as guardian.',
       );
     }
+    await _stopGuardianMonitoring();
     final base = validateBaseUrl(kazeBackendUrl);
     final status = await native.invokeMapMethod('status');
     if (status?['active'] == true) {
@@ -343,10 +426,13 @@ class SessionController extends ChangeNotifier {
         'Use the guardian link, not owner pairing credentials.',
       );
     }
+    await _stopGuardianMonitoring();
     access = next;
+    device = {};
     snapshot = data;
     received = DateTime.now();
     await storage.write(key: 'session', value: jsonEncode(next.toJson()));
+    await _refreshGuardianStatus();
     startPolling();
   });
   Future<void> mutate(String action) => run(() async {
@@ -361,13 +447,16 @@ class SessionController extends ChangeNotifier {
   Future<void> deleteSession() => run(() async {
     await api(body: {}, method: 'DELETE');
     if (Platform.isAndroid && !guardian) await native.invokeMethod('refresh');
-    await forget();
+    await _clearAccess();
   });
-  Future<void> forget() async {
+  Future<void> forget() => run(_clearAccess);
+  Future<void> _clearAccess() async {
     revision++;
+    await _stopGuardianMonitoring();
+    await storage.delete(key: 'session');
     access = null;
     snapshot = null;
-    await storage.delete(key: 'session');
+    device = {};
     changed();
   }
 

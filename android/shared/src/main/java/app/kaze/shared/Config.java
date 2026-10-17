@@ -11,7 +11,11 @@ public final class Config {
     public final boolean watch;
     private final JSONObject json;
     public Config(String raw, boolean isWatch) throws Exception {
-        json = new JSONObject(raw); watch = isWatch;
+        this(raw, isWatch ? "watch" : "owner");
+    }
+    public static Config guardian(String raw) throws Exception { return new Config(raw, "guardian"); }
+    private Config(String raw, String role) throws Exception {
+        json = new JSONObject(raw); watch = "watch".equals(role);
         baseUrl = json.getString("baseUrl").replaceAll("/+$", "");
         URI uri = new URI(baseUrl);
         String host = uri.getHost();
@@ -19,7 +23,7 @@ public final class Config {
         if (host == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null || (!"https".equals(uri.getScheme()) && !("http".equals(uri.getScheme()) && local))) throw new IllegalArgumentException("Use HTTPS, or a local/private HTTP address for debugging.");
         if (uri.getPath() != null && !uri.getPath().isEmpty()) throw new IllegalArgumentException("Server URL must not include a path.");
         id = json.getString("id"); if (!id.matches("[a-f0-9-]{36}")) throw new IllegalArgumentException("Invalid session id");
-        token = json.getString(isWatch ? "watchToken" : "ownerToken");
+        token = json.getString(role + "Token");
         if (token.length() < 32 || token.length() > 128) throw new IllegalArgumentException("Invalid access token");
         watchToken = json.optString("watchToken", "");
         initialHeading = json.optDouble("initialHeading", 0); stride = json.optDouble("strideMeters", 0.72);

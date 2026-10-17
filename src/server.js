@@ -83,9 +83,17 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000 }
           initialHeading: number(b.initialHeading ?? 0, 0, 360, 'initial heading'), ownerHash: hash(owner), guardianHash: hash(guardian), watchHash: hash(watch) };
         store.save(s); store.recordActivity(s.id, 'started', now(), 'owner'); return json(201, { ...snapshot(s, 'owner'), ownerToken: owner, guardianToken: guardian, watchToken: watch });
       }
-      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar))?$/.exec(url.pathname);
+      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status))?$/.exec(url.pathname);
       if (match) {
         const id = match[1], action = match[2]; let s = current(id);
+        if (action === 'guardian-status') {
+          auth(req, s, ['guardian']);
+          if (req.method !== 'GET') throw new Problem(405, 'Method not allowed');
+          // Background delivery is not evidence that a person opened the alert.
+          // This endpoint never returns location, names, credentials or trail data.
+          return json(200, { id: s.id, role: 'guardian', phase: s.phase,
+            serverNow: now(), expiresAt: s.expiresAt, acknowledgedAt: s.acknowledgedAt ?? null });
+        }
         if (action === 'ar') {
           auth(req, s, ['owner', 'guardian']);
           if (req.method !== 'GET') throw new Problem(405, 'Method not allowed');

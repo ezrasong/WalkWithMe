@@ -33,6 +33,8 @@ cd ..
 
 Start a session on the phone, open KAZE on the paired watch, and share the guardian link from Settings. The watch uses the phone's Bluetooth connection; the phone can use Wi-Fi or cellular data.
 
-Wearer recording runs on Android. iPhone guardian flows are tested in the iOS Simulator; signed builds and physical-device verification are still needed. Run `npm run test:ios` on a configured Mac for the guardian regression suite. Keep the guardian app open; background push and emergency dispatch are not implemented.
+Wearer recording runs on Android. Android guardians can opt into **Background guardian alerts** after joining: a visible native service checks server status and posts a notification after confirmed nonresponse, even while the Flutter screen is closed. Allow notifications and background battery use. Network loss is reported separately; it never becomes a presumed safety alert. Force-stop, reboot, restricted battery use or blocked notifications can interrupt delivery. Reopen KAZE and re-enable monitoring after force-stop or reboot. This is background polling, not remote push.
+
+iPhone guardian flows are tested in the iOS Simulator; signed builds and physical-device verification are still needed. iPhone guardians must keep KAZE open. Apple background push, calls, SMS, backup-contact escalation and emergency dispatch are not implemented. Run `npm run test:ios` on a configured Mac for the guardian regression suite.
 
 Experimental [guardian spatial AR](docs/AR_BACKEND.md) uses native ARKit/RealityKit or ARCore and a measured outdoor walking baseline to register supported recorded observations. Unknown heights, poor registration and excessive uncertainty require the map. Physical accuracy and two-phone operation still need verification. The separate compass preview remains unregistered.

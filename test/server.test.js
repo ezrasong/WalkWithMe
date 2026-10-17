@@ -27,6 +27,32 @@ test('guardian sees neither route nor origin before an alert, even with a valid 
   const alert = await f.request(url, { token: s.guardianToken });
   assert.equal(alert.body.phase, 'alert'); assert.equal(alert.body.trail.phoneSteps, 1); assert.equal(alert.body.origin, 'Private entrance'); assert.ok(alert.body.alertSeenAt);
 });
+test('background guardian status is private, scoped and never marks the request as seen', async t => {
+  const f = await fixture(t), s = await f.create(), url = `/api/sessions/${s.id}`;
+  const read = token => f.request(`${url}/guardian-status`, { token });
+  for (const token of [undefined, s.ownerToken, s.watchToken]) assert.equal((await read(token)).status, 401);
+  assert.equal((await f.request(`${url}/guardian-status`, { token: s.guardianToken, body: {} })).status, 405);
+  for (const [advance, phase] of [[0, 'armed'], [5000, 'challenge'], [3000, 'alert']]) {
+    f.jump(advance);
+    const result = await read(s.guardianToken);
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.body, { id: s.id, role: 'guardian', phase,
+      serverNow: f.time(), expiresAt: s.expiresAt, acknowledgedAt: null });
+    const stored = f.app.store.get(s.id);
+    assert.equal(stored.guardianSeenAt, undefined); assert.equal(stored.alertSeenAt, undefined);
+  }
+  await f.request(`${url}/acknowledge`, { token: s.guardianToken, body: { confirm: true } });
+  assert.equal((await read(s.guardianToken)).body.acknowledgedAt, f.time());
+  await f.request(`${url}/resolve`, { token: s.ownerToken, body: { confirm: true } });
+  assert.equal((await read(s.guardianToken)).body.phase, 'resolved');
+  const other = await f.create();
+  await f.request(`/api/sessions/${other.id}/revoke-guardian`, { token: other.ownerToken, body: { confirm: true } });
+  assert.equal((await f.request(`/api/sessions/${other.id}/guardian-status`, { token: other.guardianToken })).status, 401);
+  await f.request(url, { token: s.ownerToken, method: 'DELETE' });
+  assert.equal((await read(s.guardianToken)).status, 404);
+  const expiring = await f.create(); f.jump(8 * 3600000);
+  assert.equal((await f.request(`/api/sessions/${expiring.id}/guardian-status`, { token: expiring.guardianToken })).status, 401);
+});
 test('AR evidence is read-only, guardian/owner scoped, alert-only and revoked immediately', async t => {
   const f = await fixture(t), s = await f.create(), url = `/api/sessions/${s.id}`;
   const read = token => f.request(`${url}/ar`, { token });
