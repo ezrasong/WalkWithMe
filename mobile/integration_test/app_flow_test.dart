@@ -13,6 +13,7 @@ void main() {
   testWidgets('Vivo real app: start, queue actual readings, check in and end', (
     tester,
   ) async {
+    bool endedThroughUI = false;
     app.main();
     addTearDown(() async {
       // Dispose every test-owned session even if a hardware assertion fails.
@@ -28,6 +29,10 @@ void main() {
         },
         body: jsonEncode({'confirm': true}),
       );
+      if (!endedThroughUI && const bool.fromEnvironment('KAZE_VERIFY_WATCH')) {
+        // Preserve the relay during failure cleanup as well as the happy path.
+        await Future<void>.delayed(const Duration(seconds: 20));
+      }
       await const FlutterSecureStorage().delete(key: 'session');
     });
     Future<void> waitFor(Finder finder, {int seconds = 25}) async {
@@ -76,8 +81,55 @@ void main() {
     expect(response.statusCode, 200);
     final snapshot = jsonDecode(response.body);
     expect(snapshot['sources']['phone'], isNotNull);
+    if (const bool.fromEnvironment('KAZE_VERIFY_UI')) {
+      await binding.convertFlutterSurfaceToImage();
+      Future<void> capture(String name) async {
+        await Future<void>.delayed(const Duration(seconds: 3));
+        await tester.pump();
+        final bytes = await binding.takeScreenshot(name);
+        final directory = Directory('/data/user/0/app.kaze.trail/files');
+        await directory.create(recursive: true);
+        await File('${directory.path}/$name.png').writeAsBytes(bytes);
+        debugPrint('KAZE_CAPTURE_$name');
+      }
+
+      await tester.tap(find.text('Settings'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Dark'));
+      await tester.pumpAndSettle();
+      expect(
+        Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
+        Brightness.dark,
+      );
+      await capture('ui-settings-dark');
+      await tester.tap(find.text('Map'));
+      await tester.pumpAndSettle();
+      await capture('ui-map-dark');
+      expect(find.byTooltip('Recenter on last location'), findsOneWidget);
+      await tester.tap(find.byTooltip('Show entire recorded trail'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Recenter on last location'));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.expand_less));
+      await tester.pumpAndSettle();
+      expect(find.text('Session details'), findsOneWidget);
+      await tester.tap(find.byTooltip('Close details'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Light'));
+      await tester.pumpAndSettle();
+      expect(
+        Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
+        Brightness.light,
+      );
+      await tester.tap(find.text('Map'));
+      await tester.pumpAndSettle();
+      await capture('ui-map-light');
+      debugPrint('KAZE_UI_VERIFIED');
+    }
     if (const bool.fromEnvironment('KAZE_VERIFY_WATCH')) {
-      // The host opens the real watch app and taps its explicit Start button.
+      // The host opens the real watch app; there is no Start/enable tap.
       // No manual phone 'Pair watch' action or fabricated watch readings are used.
       debugPrint('KAZE_WATCH_DISCOVERY_READY');
       final until = DateTime.now().add(const Duration(seconds: 120));
@@ -152,16 +204,29 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pump();
     final end = find.text('End session and stop sharing');
-    await tester.ensureVisible(end);
+    await tester.scrollUntilVisible(
+      end,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await Scrollable.ensureVisible(tester.element(end), alignment: .4);
+    await tester.pumpAndSettle();
     await tester.tap(end);
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await waitFor(find.text('Confirm'));
     await tester.tap(find.text('Confirm'));
     await waitFor(find.text('Return to setup'));
+    await tester.scrollUntilVisible(
+      find.text('Return to setup'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
     final ended = await http.get(
       Uri.parse('${access['baseUrl']}/api/sessions/${access['id']}'),
       headers: {'Authorization': 'Bearer ${access['token']}'},
     );
     expect(jsonDecode(ended.body)['phase'], 'resolved');
+    endedThroughUI = true;
     debugPrint('KAZE_SESSION_END_CONFIRMED');
     if (const bool.fromEnvironment('KAZE_VERIFY_WATCH')) {
       // Flutter device-test cleanup removes the phone app. Keep its relay alive

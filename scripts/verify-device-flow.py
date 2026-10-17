@@ -4,6 +4,7 @@ KAZE's watch controls. --long-run also performs a bounded network outage and a
 610-second screen-off interval, without synthetic sensor/location injection.
 """
 from pathlib import Path
+from contextlib import closing
 import argparse, json, os, re, shutil, sqlite3, subprocess, time
 import xml.etree.ElementTree as ET
 
@@ -18,6 +19,7 @@ ADB = shutil.which('adb') or str(Path.home()/'.cache/kaze-android-sdk/platform-t
 LOG = ROOT/args.log
 REPORT = ROOT/'artifacts'/('device-long-run.json' if args.long_run else 'watch-checkin-shutdown.json')
 report = {'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'longRun': args.long_run, 'passed': False}
+captured = set()
 private = (ROOT/'artifacts/private-queue-snapshot').resolve()
 assert private.is_relative_to((ROOT/'artifacts').resolve())
 
@@ -39,6 +41,12 @@ def wait_marker(marker, seconds=180):
     until = time.monotonic()+seconds
     while time.monotonic()<until:
         text = log_text()
+        for name in ('ui-map-light','ui-map-dark','ui-settings-dark'):
+            if 'KAZE_CAPTURE_'+name in text and name not in captured:
+                screenshot=adb(args.phone,'exec-out','run-as','app.kaze.trail','cat','files/'+name+'.png',binary=True,optional=True)
+                if screenshot.startswith(b'\x89PNG'):
+                    (ROOT/'artifacts'/(name+'.png')).write_bytes(screenshot)
+                    captured.add(name)
         if 'Some tests failed' in text:
             raise RuntimeError('The Flutter device test failed; inspect its redacted log.')
         if marker in text:
@@ -69,7 +77,7 @@ def tap_watch(text):
 
 def server_state(session):
     path = ROOT/'data/device-test.sqlite'
-    with sqlite3.connect(f'file:{path.as_posix()}?mode=ro', uri=True) as db:
+    with closing(sqlite3.connect(f'file:{path.as_posix()}?mode=ro', uri=True)) as db:
         row = db.execute('SELECT body FROM sessions WHERE id=?', (session,)).fetchone()
         if not row:
             raise RuntimeError('Test session absent from the expected disposable backend.')
@@ -90,7 +98,7 @@ def queue_ids(serial, label, session):
             if data.startswith(b'SQLite format 3') or (suffix and len(data)>32 and not data.startswith(b'cat:')):
                 (directory/('outbox.db'+suffix)).write_bytes(data)
         if not paths[0].exists(): raise RuntimeError('Native queue snapshot unavailable for '+label)
-        with sqlite3.connect(str(paths[0])) as db:
+        with closing(sqlite3.connect(str(paths[0]))) as db:
             return {json.loads(row[0])['id'] for row in db.execute('SELECT payload FROM queue WHERE session=?',(session,))}
     finally:
         for path in paths:
@@ -162,6 +170,10 @@ if 'All tests passed!' in log_text() or 'Some tests failed' in log_text():
     raise SystemExit('Start a fresh Flutter integration run before starting this companion.')
 try:
     wait_marker('KAZE_WATCH_DISCOVERY_READY')
+    for name in ('ui-map-light','ui-map-dark','ui-settings-dark'):
+        screenshot=adb(args.phone,'exec-out','run-as','app.kaze.trail','cat','files/'+name+'.png',binary=True,optional=True)
+        if screenshot.startswith(b'\x89PNG'):
+            (ROOT/'artifacts'/(name+'.png')).write_bytes(screenshot)
     phone=config(args.phone)
     session=phone['id']
     until=time.monotonic()+40
@@ -175,13 +187,26 @@ try:
         pause(1)
     else: raise RuntimeError('Watch did not discover the current phone session.')
     report['automaticScopedDiscovery']=True
-    tap_watch('Start watch session')
+    # Opening KAZE joins the phone session automatically; no Start/enable tap.
+    until=time.monotonic()+40
+    while time.monotonic()<until:
+        if prefs(args.watch).get('active')=='true': break
+        # Wireless ADB round trips can outlast a watch's short display timeout.
+        # Keep the actual foreground flow visible, without tapping activation.
+        adb(args.watch,'shell','input','keyevent','KEYCODE_WAKEUP')
+        adb(args.watch,'shell','am','start','-n','app.kaze.trail/app.kaze.watch.MainActivity')
+        pause(1)
+    else: raise RuntimeError('Watch did not automatically join the phone session.')
+    report['noWatchActivationTap']=True
     wait_marker('KAZE_WATCH_CHECKIN_READY')
     tap_watch('Check in')
     wait_marker('KAZE_WATCH_CHECKIN_CONFIRMED',seconds=50)
     _,_,activity=server_state(session)
     report['watchCheckInServerAccepted']=any(a['action']=='check-in' and a['role']=='watch' for a in activity)
     if not report['watchCheckInServerAccepted']: raise RuntimeError('No authoritative watch response in Activity.')
+    screenshot=adb(args.watch,'exec-out','screencap','-p',binary=True,optional=True)
+    if screenshot.startswith(b'\x89PNG'):
+        (ROOT/'artifacts/watch-interface.png').write_bytes(screenshot)
     print('Automatic discovery, real relay uploads and explicit watch check-in confirmed.',flush=True)
     if args.long_run:
         try:

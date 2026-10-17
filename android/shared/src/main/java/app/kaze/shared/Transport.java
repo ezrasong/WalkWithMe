@@ -15,11 +15,16 @@ public final class Transport {
         public HttpError(int status, String message) { super(message); this.status = status; }
     }
     public static JSONObject send(Context c, Config config, String action, JSONObject body) throws Exception {
-        try { return request(config, action, body); }
-        catch (Exception directFailure) {
-            if (directFailure instanceof HttpError) throw directFailure;
-            if (!config.watch) throw directFailure;
-            return Relay.request(c, config, action, body);
+        if (!config.watch) return request(config, action, body);
+        // Paired-phone transport works over Bluetooth without watch Wi-Fi.
+        try { return Relay.request(c, config, action, body); }
+        catch (Exception relayFailure) {
+            if (relayFailure instanceof HttpError) throw relayFailure;
+            try { return request(config, action, body); }
+            catch (Exception directFailure) {
+                if (directFailure instanceof HttpError) throw directFailure;
+                throw new IllegalStateException("Phone relay unavailable: " + relayFailure.getMessage() + ". Direct connection unavailable: " + directFailure.getMessage(), relayFailure);
+            }
         }
     }
     public static JSONObject request(Config config, String action, JSONObject body) throws Exception {

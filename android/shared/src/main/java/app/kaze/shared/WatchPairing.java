@@ -3,7 +3,7 @@ package app.kaze.shared;
 import android.content.Context;
 import com.google.android.gms.wearable.Wearable;
 
-/** Configuration discovery is automatic; starting recording still requires an explicit tap. */
+/** The watch joins the phone's consented session when its foreground UI opens. */
 public final class WatchPairing {
     public static final String REQUEST = "/kaze/request-pair", CONFIG = "/kaze/pair", STATUS = "/kaze/pair-status";
     // Process-local: a process restart must not strand a persisted 'connecting' lock.
@@ -16,7 +16,7 @@ public final class WatchPairing {
         // Persist an allowlisted watch payload, even when an older sender adds other fields.
         new Config(config.forWatch(), true).save(c);
         discovering = false;
-        Config.prefs(c).edit().putString("status", "Phone connected. Tap Start to record this session.").apply();
+        Config.prefs(c).edit().putString("status", "Phone connected. Joining your safety session.").apply();
         return true;
     }
     public static synchronized void unavailable(Context c, String message) {

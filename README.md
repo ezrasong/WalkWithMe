@@ -2,7 +2,7 @@
 
 KAZE is a timed safety-session prototype: the wearer carries the Vivo in a pocket, checks in when reminded, and an authorized guardian can see recorded geographic evidence after nonresponse. Optional live sharing requires a separate choice. The backend and SQLite database run on the PC.
 
-The phone app is now **Flutter for Android and iOS**, with shared Map / Activity / Settings screens, not a WebView. Android runs the existing native foreground recorder and Galaxy Watch companion. The current iPhone role is guardian for the designated Vivo wearer. See [mobile build and pairing](docs/FLUTTER_MOBILE.md), [revised goal](KAZE_BUILD_GOAL.md), and [PC connectivity](docs/PC_BACKEND.md).
+The phone app is now **Flutter for Android and iOS**, with shared Map / Activity / Settings screens and a native MapLibre vector map. Map labels stay sharp while zooming, and appearance supports remembered System / Light / Dark choices. No phone WebView is used. Android runs the existing native foreground recorder and Galaxy Watch companion. The current iPhone role is guardian for the designated Vivo wearer. See [mobile build and pairing](docs/FLUTTER_MOBILE.md), [revised goal](KAZE_BUILD_GOAL.md), and [PC connectivity](docs/PC_BACKEND.md).
 
 No wearer camera is used for tracking. Phone/watch location fixes retain timestamp, accuracy, provider and provenance. Sources are never blindly averaged. Gaps and uncertain observations remain visible; motion/pressure never invent geographic coordinates, rooms, floors or stairs.
 
@@ -55,4 +55,4 @@ Auth roles, persistent deadlines, idempotent offline queues, retention, expiry, 
 
 The optional guardian camera view is an **experimental approximate outdoor direction cue**, not a shared spatially anchored AR route. No custom learned motion estimator is integrated. Compilation and simulated tests do not establish real route accuracy, screen-off reliability or successful assistance. See [implementation/evidence](docs/IMPLEMENTATION.md) and [demo](docs/DEMO.md).
 
-Current test/device evidence is recorded in [the verification ledger](docs/VERIFICATION.md). Watch setup is automatic from the watch after a phone session starts; only an explicit watch Start tap is needed to consent.
+Current test/device evidence is recorded in [the verification ledger](docs/VERIFICATION.md). Start a consented session on the phone, open KAZE on the paired watch, and tap Check in. There is no separate watch activation button. The watch prefers the paired-phone connection, including Bluetooth; watch Wi-Fi is optional.

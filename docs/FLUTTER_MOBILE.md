@@ -1,6 +1,6 @@
 # KAZE mobile (Flutter)
 
-The phone app is Flutter for Android and iOS. It renders widgets and the geographic map directly; it does not embed the browser dashboard or a WebView. The Vivo is the wearer recorder; an iPhone or second Android phone joins as guardian. Wear OS stays native Java.
+The phone app is Flutter for Android and iOS. It renders Flutter widgets and a native MapLibre vector map; it does not embed the browser dashboard or a WebView. The Vivo is the wearer recorder; an iPhone or second Android phone joins as guardian. Wear OS stays native Java.
 
 ## Android on this Windows PC
 
@@ -53,7 +53,7 @@ On iPhone choose **Join as guardian** and paste the link copied from the wearer'
 5. Keep the guardian app open. There is no background push, SMS, call or emergency dispatch.
 6. End, delete or revoke on the wearer. Guardian evidence is cleared after the next authorization check and is hidden whenever the server cannot confirm access. Previously viewed information/screenshots cannot be remotely erased.
 
-Street-map tiles come from OpenStreetMap, which receives the viewed map area and IP. Disable **Load street map** in Settings if desired. Recorded coordinates and uncertainty work without tiles; an internet tile outage is not a location outage.
+The map uses native MapLibre rendering with OpenFreeMap vector tiles and light Positron/dark styles. OpenFreeMap receives the viewed map area and IP; geographic data comes from OpenStreetMap. Streets and labels render at device resolution instead of scaling bitmap tiles. Disable **Street map** in Settings if desired. Recorded coordinates and uncertainty work without tiles; an internet tile outage is not a location outage. OpenFreeMap, OpenMapTiles and OpenStreetMap are attributed in the map.
 
 ## Optional camera preview
 
@@ -80,6 +80,14 @@ After installing both debug apps and pairing the Watch4 with the Vivo in Galaxy 
 
 1. Start a consented safety session in KAZE on the Vivo.
 2. Open KAZE on the watch. It automatically requests the current session over Wear Data Layer, including through the phone's background listener.
-3. When it says Phone connected, tap Start watch session and choose permissions. Discovery alone does not start recording.
+3. KAZE joins the consented phone session automatically. Approve first-use OS permissions if requested, then tap **Check in**. There is no separate Start/enable button.
 
 There is no manual Pair Galaxy Watch button in the ordinary Flutter flow. The watch receives an allowlisted watch credential, never the owner's or guardian's credential. Discovery cannot replace a starting/active watch session. If there is no active phone session, the idle watch clears stale configuration and says to start on the phone. Foreground discovery retries when a connection is unavailable. ADB wireless pairing is a development installation step, separate from normal KAZE app pairing.
+
+The watch prefers Wear Data Layer through the paired phone, including Bluetooth. It does not require its own Wi-Fi while connected to the phone. The phone still needs a working route to the backend to confirm check-ins. If the phone relay is unavailable, the watch can attempt a direct backend connection over its own network. Offline sensor readings queue locally; an offline check-in is never presented as server-confirmed.
+
+## Appearance and layout
+
+Settings → Appearance offers System, Light and Dark; the choice is remembered. The native vector map uses matching light/dark styles with sharp street labels. The bundled Dark adaptation increases label, road and building contrast; upstream notices are available under Licenses & map credits. Check-in stays prominent above the map; detailed readings and guardian response actions are available from the location card. Map controls recenter, show the complete recorded trail, and zoom. Blue solid phone paths and purple dashed watch paths retain separate sources and real gaps. Panning pauses automatic following until recenter.
+
+The layout follows Apple's [Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/), especially layout, typography, accessibility and maps: safe areas, scalable text, clear hierarchy, generous touch targets, labeled controls, restrained surfaces and grouped destructive actions. iOS uses Cupertino navigation/tab bars and adaptive dialogs; Android keeps platform navigation. Verify actual iOS rendering and signing on the Mac before treating it as iPhone-tested.

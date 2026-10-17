@@ -2,42 +2,160 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'session.dart';
 import 'direction_preview.dart';
+import 'trail_map.dart';
+export 'trail_map.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  LicenseRegistry.addLicense(() async* {
+    final notice = await rootBundle.loadString('assets/maps/LICENSE.md');
+    yield LicenseEntryWithLineBreaks(['OpenFreeMap map styles'], notice);
+  });
   runApp(const KazeApp());
 }
 
-class KazeApp extends StatelessWidget {
+class KazeApp extends StatefulWidget {
   const KazeApp({super.key});
+  @override
+  State<KazeApp> createState() => _KazeAppState();
+}
+
+class _KazeAppState extends State<KazeApp> {
+  ThemeMode appearance = ThemeMode.system;
+  final storage = const FlutterSecureStorage();
+  @override
+  void initState() {
+    super.initState();
+    storage
+        .read(key: 'appearance')
+        .then((value) {
+          if (mounted) {
+            setState(
+              () => appearance = ThemeMode.values.firstWhere(
+                (mode) => mode.name == value,
+                orElse: () => ThemeMode.system,
+              ),
+            );
+          }
+        })
+        .catchError((Object _) {
+          /* Use system appearance if storage is unavailable. */
+        });
+  }
+
+  void setAppearance(ThemeMode mode) {
+    setState(() => appearance = mode);
+    storage
+        .write(key: 'appearance', value: mode.name)
+        .catchError((Object _) {});
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'KAZE',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff225cbe)),
-      useMaterial3: true,
-      scaffoldBackgroundColor: const Color(0xfff6f7f9),
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(),
+    theme: kazeTheme(Brightness.light),
+    darkTheme: kazeTheme(Brightness.dark),
+    themeMode: appearance,
+    home: SessionScreen(
+      appearance: appearance,
+      onAppearanceChanged: setAppearance,
+    ),
+  );
+}
+
+ThemeData kazeTheme(Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  final colors = ColorScheme.fromSeed(
+    seedColor: const Color(0xff245caa),
+    brightness: brightness,
+    surface: dark ? const Color(0xff1c1e23) : Colors.white,
+  );
+  return ThemeData(
+    colorScheme: colors,
+    useMaterial3: true,
+    scaffoldBackgroundColor: dark
+        ? const Color(0xff101216)
+        : const Color(0xfff3f4f7),
+    textTheme: const TextTheme(
+      headlineSmall: TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.5,
       ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+      titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+      titleMedium: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+      bodyLarge: TextStyle(fontSize: 17, height: 1.4),
+      bodyMedium: TextStyle(fontSize: 16, height: 1.4),
+      bodySmall: TextStyle(fontSize: 14, height: 1.4),
+    ),
+    appBarTheme: AppBarTheme(
+      backgroundColor: colors.surface,
+      systemOverlayStyle: dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
+      surfaceTintColor: Colors.transparent,
+      centerTitle: false,
+      titleTextStyle: TextStyle(
+        color: colors.onSurface,
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
       ),
     ),
-    home: const SessionScreen(),
+    cardTheme: CardThemeData(
+      color: colors.surface,
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: colors.surfaceContainerLow,
+      contentPadding: const EdgeInsets.all(16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(52),
+        textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: colors.surface,
+      height: 72,
+    ),
   );
 }
 
 class SessionScreen extends StatefulWidget {
-  const SessionScreen({super.key});
+  final ThemeMode appearance;
+  final ValueChanged<ThemeMode>? onAppearanceChanged;
+  const SessionScreen({
+    super.key,
+    this.appearance = ThemeMode.system,
+    this.onAppearanceChanged,
+  });
   @override
   State<SessionScreen> createState() => _SessionScreenState();
 }
@@ -51,8 +169,15 @@ class _SessionScreenState extends State<SessionScreen>
   final name = TextEditingController(text: 'Alex'),
       link = TextEditingController();
   int tab = 0, interval = 120, grace = 30;
+  int setupRole = Platform.isAndroid ? 0 : 1;
   bool consent = false, live = false, tiles = true;
   Timer? clock;
+  String lastMessage = '';
+  bool get transientMessage => const [
+    'Check-in confirmed by server.',
+    'Confirmed by server.',
+    'Private guardian link copied.',
+  ].contains(c.message);
   @override
   void initState() {
     super.initState();
@@ -63,7 +188,23 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   void update() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (lastMessage != c.message) {
+      lastMessage = c.message;
+      if (transientMessage) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(lastMessage),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        });
+      }
+    }
+    setState(() {});
   }
 
   @override
@@ -100,20 +241,21 @@ class _SessionScreenState extends State<SessionScreen>
   );
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('KAZE'),
-      actions: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Center(
-            child: Text(
-              'Team test',
-              style: Theme.of(context).textTheme.labelMedium,
+    appBar: Platform.isIOS
+        ? CupertinoNavigationBar(
+            middle: Text(
+              c.access == null
+                  ? 'KAZE'
+                  : ['Session', 'Activity', 'Settings'][tab],
+            ),
+          )
+        : AppBar(
+            title: Text(
+              c.access == null
+                  ? 'KAZE'
+                  : ['Session', 'Activity', 'Settings'][tab],
             ),
           ),
-        ),
-      ],
-    ),
     body: SafeArea(
       child: Column(
         children: [
@@ -124,7 +266,7 @@ class _SessionScreenState extends State<SessionScreen>
                 ? waiting()
                 : [mapPage(), activityPage(), settingsPage()][tab],
           ),
-          if (c.message.isNotEmpty)
+          if (c.message.isNotEmpty && !transientMessage)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Semantics(liveRegion: true, child: Text(c.message)),
@@ -135,6 +277,25 @@ class _SessionScreenState extends State<SessionScreen>
     ),
     bottomNavigationBar: c.access == null
         ? null
+        : Platform.isIOS
+        ? CupertinoTabBar(
+            currentIndex: tab,
+            onTap: (value) => setState(() => tab = value),
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(CupertinoIcons.map),
+                label: 'Map',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(CupertinoIcons.clock),
+                label: 'Activity',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(CupertinoIcons.settings),
+                label: 'Settings',
+              ),
+            ],
+          )
         : NavigationBar(
             selectedIndex: tab,
             onDestinationSelected: (value) => setState(() => tab = value),
@@ -162,25 +323,50 @@ class _SessionScreenState extends State<SessionScreen>
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const Text(
-        'The Vivo records the wearer’s journey. A second iPhone or Android phone can join as guardian. No wearer camera is used.',
+        'Stay connected to someone you trust. Start a session or join someone as their guardian.',
       ),
-      card([
-        Text('Join as guardian', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        TextField(
-          controller: link,
-          decoration: const InputDecoration(labelText: 'Private guardian link'),
-          autocorrect: false,
-          enableSuggestions: false,
-          keyboardType: TextInputType.url,
-        ),
-        const SizedBox(height: 12),
-        FilledButton(
-          onPressed: c.busy ? null : () => c.join(link.text),
-          child: const Text('Open my person’s session'),
-        ),
-      ]),
+      const SizedBox(height: 20),
       if (Platform.isAndroid)
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(
+              value: 0,
+              label: Text('For me'),
+              icon: Icon(Icons.shield_outlined),
+            ),
+            ButtonSegment(
+              value: 1,
+              label: Text('For someone else'),
+              icon: Icon(Icons.people_outline),
+            ),
+          ],
+          selected: {setupRole},
+          onSelectionChanged: (value) =>
+              setState(() => setupRole = value.first),
+        ),
+      if (setupRole == 1)
+        card([
+          Text(
+            'Join as guardian',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: link,
+            decoration: const InputDecoration(
+              labelText: 'Private guardian link',
+            ),
+            autocorrect: false,
+            enableSuggestions: false,
+            keyboardType: TextInputType.url,
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: c.busy ? null : () => c.join(link.text),
+            child: const Text('Open my person’s session'),
+          ),
+        ]),
+      if (Platform.isAndroid && setupRole == 0)
         card([
           Text(
             'Start on the wearer’s phone',
@@ -223,15 +409,15 @@ class _SessionScreenState extends State<SessionScreen>
             ],
             onChanged: (v) => setState(() => grace = v!),
           ),
-          CheckboxListTile(
+          CheckboxListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             value: consent,
             onChanged: (v) => setState(() => consent = v!),
             title: const Text(
-              'I agree to record this session and share its trail after nonresponse with the person I give the private link to. Data expires after 8 hours.',
+              'I agree to record this session on my phone and paired watch, and share its trail after nonresponse with my chosen guardian. Data expires after 8 hours.',
             ),
           ),
-          CheckboxListTile(
+          CheckboxListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             value: live,
             onChanged: (v) => setState(() => live = v!),
@@ -256,7 +442,7 @@ class _SessionScreenState extends State<SessionScreen>
         'No emergency dispatch, calls, SMS or push are connected. A guardian must keep the app open. The PC and its network connection must stay running.',
       ),
       note(
-        'Street maps use OpenStreetMap, which receives the viewed map area and IP address. You can turn tiles off in Settings.',
+        'OpenFreeMap serves vector maps using OpenStreetMap data and receives the viewed area and IP address. You can turn the street map off in Settings.',
       ),
       note(
         'Location and camera permission are requested only for their respective features. The optional guardian camera preview stays on that phone.',
@@ -309,123 +495,274 @@ class _SessionScreenState extends State<SessionScreen>
       : TimeOfDay.fromDateTime(
           DateTime.fromMillisecondsSinceEpoch(value.toInt()),
         ).format(context);
+  String countdown(int seconds) => seconds >= 60
+      ? '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}'
+      : '${seconds}s';
+
   Widget mapPage() {
     final s = c.snapshot!, p = latest;
     final deadline =
         (s['dueAt'] as num).toInt() +
         (phase == 'challenge' ? (s['graceSeconds'] as num).toInt() * 1000 : 0);
     final seconds = ((deadline - c.serverNow) / 1000).ceil().clamp(0, 36000);
-    return LayoutBuilder(
-      builder: (context, size) => ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+    final colors = Theme.of(context).colorScheme;
+    final urgent = phase == 'challenge' || phase == 'alert';
+    final status = card([
+      Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 16,
+        runSpacing: 8,
         children: [
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-            title: Text(phaseText),
-            trailing: Text(
-              ['armed', 'challenge'].contains(phase) ? '${seconds}s' : '',
-            ),
-            subtitle: const Text('No emergency service has been contacted.'),
-          ),
-          if (s['sensorMode'] == 'simulated')
-            const Text('Simulated readings · not hardware measurements'),
-          SizedBox(
-            height: (size.maxHeight * .44).clamp(180, 420),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: TrailMap(snapshot: s, tiles: tiles),
-            ),
-          ),
-          card([
-            Text(s['name'], style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(
-              s['shared'] != true
-                  ? 'Trail stays private until a check-in goes unanswered.'
-                  : p == null
-                  ? 'No location received. Check-ins still work.'
-                  : '${p['source']} · ${age(p['fixAt'])} · reported accuracy ${(p['accuracy'] as num).round()} m${c.serverNow - (p['fixAt'] as num) > 30000 ? ' · Stale' : ''}',
-            ),
-            if (p != null)
-              note(
-                '${(p['latitude'] as num).toStringAsFixed(5)}, ${(p['longitude'] as num).toStringAsFixed(5)}',
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                urgent
+                    ? Icons.notifications_active_outlined
+                    : phase == 'resolved'
+                    ? Icons.check_circle_outline
+                    : Icons.shield_outlined,
+                size: 22,
+                color: urgent ? colors.error : colors.primary,
               ),
-            note('Last server-accepted check-in: ${at(s['lastCheckInAt'])}'),
-            note(
-              phase == 'resolved'
-                  ? 'Guardian sharing stopped.'
-                  : s['guardianRevokedAt'] != null
-                  ? 'Guardian access revoked.'
-                  : s['liveSharing'] == true
-                  ? 'Live sharing explicitly enabled for this session.'
-                  : 'Guardian sharing only after nonresponse.',
-            ),
-            if (!c.guardian && phase != 'resolved')
-              FilledButton.icon(
-                onPressed: c.busy || phase == 'alert'
-                    ? null
-                    : () => c.mutate('check-in'),
-                icon: const Icon(Icons.check_circle_outline),
-                label: const Text('Check in'),
-              ),
-            if (c.guardian && phase == 'alert') ...[
-              FilledButton(
-                onPressed: c.busy || s['acknowledgedAt'] != null
-                    ? null
-                    : () => c.mutate('acknowledge'),
-                child: const Text('I’ve seen the request'),
-              ),
-              OutlinedButton(
-                onPressed: c.busy || s['arrivalReportedAt'] != null
-                    ? null
-                    : () => c.mutate('arrived'),
-                child: const Text('Report I’m with them'),
-              ),
-              note(
-                s['arrivalReportedAt'] != null
-                    ? 'Guardian reports arrival. Not independently verified.'
-                    : s['acknowledgedAt'] != null
-                    ? 'Acknowledged. Arrival is not verified.'
-                    : 'An acknowledgment does not resolve the incident.',
-              ),
-              if (p != null)
-                OutlinedButton.icon(
-                  onPressed: () => launchUrl(
-                    Uri.https('www.google.com', '/maps/dir/', {
-                      'api': '1',
-                      'destination': '${p['latitude']},${p['longitude']}',
-                    }),
-                    mode: LaunchMode.externalApplication,
-                  ),
-                  icon: const Icon(Icons.directions),
-                  label: const Text('Directions to last point'),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  phaseText,
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-              if (p != null)
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => DirectionPreview(session: c),
-                    ),
-                  ),
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('Camera direction preview'),
-                ),
+              ),
             ],
-          ]),
-          note(c.connection),
-          if (!c.guardian)
-            note(
-              c.device['status']?.toString() ?? 'Waiting for recorder status.',
-            ),
-          for (final warning in (s['geography']?['warnings'] as List? ?? []))
-            note(warning.toString()),
-          note(
-            'Phone and watch paths are shown separately. Gaps are not filled. Watch location may come from its paired phone.',
           ),
+          if (['armed', 'challenge'].contains(phase))
+            Text(
+              countdown(seconds),
+              semanticsLabel: '$seconds seconds until response is due',
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(color: urgent ? colors.error : colors.primary),
+            ),
         ],
       ),
+      const SizedBox(height: 4),
+      Text(
+        phase == 'resolved'
+            ? 'Sharing has stopped.'
+            : phase == 'alert'
+            ? 'Your guardian can view the shared trail. No emergency service has been contacted.'
+            : 'Last check-in: ${at(s['lastCheckInAt'])}',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      if (s['sensorMode'] == 'simulated')
+        note('Simulated readings · not hardware measurements'),
+      if (!c.guardian && phase != 'resolved') ...[
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: c.busy || phase == 'alert'
+              ? null
+              : () => c.mutate('check-in'),
+          icon: const Icon(Icons.check_circle_outline),
+          label: const Text('Check in'),
+        ),
+      ],
+      if (c.guardian && phase == 'alert') ...[
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: c.busy || s['acknowledgedAt'] != null
+              ? null
+              : () => c.mutate('acknowledge'),
+          child: Text(
+            s['acknowledgedAt'] != null
+                ? 'Request acknowledged'
+                : 'I’ve seen the request',
+          ),
+        ),
+      ],
+    ]);
+    final location = Card(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Icon(
+          p == null ? Icons.location_searching : Icons.location_on_outlined,
+          color: colors.primary,
+        ),
+        title: Text(
+          p == null
+              ? (s['shared'] == true
+                    ? 'Waiting for location'
+                    : 'Trail is private')
+              : s['name'],
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        subtitle: Text(
+          p == null
+              ? 'Session details'
+              : '${age(p['fixAt'])} · ±${(p['accuracy'] as num).round()} m${c.serverNow - (p['fixAt'] as num) > 30000 ? ' · Stale' : ''}',
+        ),
+        trailing: const Icon(Icons.expand_less),
+        onTap: showSessionDetails,
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, size) {
+        final compact =
+            size.maxHeight < 520 ||
+            MediaQuery.textScalerOf(context).scale(16) > 23;
+        final map = ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: TrailMap(key: ValueKey(s['id']), snapshot: s, tiles: tiles),
+        );
+        if (compact) {
+          return ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              status,
+              SizedBox(height: 360, child: map),
+              location,
+            ],
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: [
+              status,
+              const SizedBox(height: 4),
+              Expanded(child: map),
+              const SizedBox(height: 4),
+              location,
+            ],
+          ),
+        );
+      },
     );
   }
+
+  Future<void> showSessionDetails() => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (context) => ListenableBuilder(
+      listenable: c,
+      builder: (context, _) {
+        final s = c.snapshot, p = latest;
+        if (s == null) {
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('Session unavailable. Private evidence is hidden.'),
+          );
+        }
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .8,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Session details',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close details',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(s['name'], style: Theme.of(context).textTheme.titleLarge),
+              note('Last server-accepted check-in: ${at(s['lastCheckInAt'])}'),
+              if (p != null) ...[
+                note(
+                  '${p['source']} · ${age(p['fixAt'])} · reported accuracy ${(p['accuracy'] as num).round()} m',
+                ),
+                SelectableText(
+                  '${(p['latitude'] as num).toStringAsFixed(5)}, ${(p['longitude'] as num).toStringAsFixed(5)}',
+                ),
+              ],
+              note(
+                phase == 'resolved'
+                    ? 'Guardian sharing stopped.'
+                    : s['guardianRevokedAt'] != null
+                    ? 'Guardian access revoked.'
+                    : s['liveSharing'] == true
+                    ? 'Live sharing enabled for this session.'
+                    : 'Guardian sharing only after nonresponse.',
+              ),
+              if (c.guardian && phase == 'alert') ...[
+                FilledButton(
+                  onPressed: c.busy || s['acknowledgedAt'] != null
+                      ? null
+                      : () => c.mutate('acknowledge'),
+                  child: const Text('I’ve seen the request'),
+                ),
+                OutlinedButton(
+                  onPressed: c.busy || s['arrivalReportedAt'] != null
+                      ? null
+                      : () => c.mutate('arrived'),
+                  child: const Text('Report I’m with them'),
+                ),
+                note(
+                  s['arrivalReportedAt'] != null
+                      ? 'Guardian reports arrival. Not independently verified.'
+                      : s['acknowledgedAt'] != null
+                      ? 'Acknowledged. Arrival is not verified.'
+                      : 'An acknowledgment does not resolve the incident.',
+                ),
+                if (p != null)
+                  OutlinedButton.icon(
+                    onPressed: () => launchUrl(
+                      Uri.https('www.google.com', '/maps/dir/', {
+                        'api': '1',
+                        'destination': '${p['latitude']},${p['longitude']}',
+                      }),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: const Icon(Icons.directions),
+                    label: const Text('Directions to last point'),
+                  ),
+                if (p != null)
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => DirectionPreview(session: c),
+                      ),
+                    ),
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('Camera direction preview'),
+                  ),
+              ],
+              const Divider(height: 24),
+              Text(
+                'Connection',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              note(c.connection),
+              if (!c.guardian)
+                note(
+                  c.device['status']?.toString() ??
+                      'Waiting for recorder status.',
+                ),
+              for (final warning
+                  in (s['geography']?['warnings'] as List? ?? []))
+                note(warning.toString()),
+              note(
+                'Phone and watch trails stay separate. Gaps are not filled. Watch location may come from its paired phone.',
+              ),
+              note('No emergency service has been contacted.'),
+            ],
+          ),
+        );
+      },
+    ),
+  );
 
   Widget activityPage() {
     const labels = {
@@ -455,9 +792,9 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   Future<bool> confirm(String prompt) async =>
-      await showDialog<bool>(
+      await showAdaptiveDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => AlertDialog.adaptive(
           content: Text(prompt),
           actions: [
             TextButton(
@@ -474,29 +811,100 @@ class _SessionScreenState extends State<SessionScreen>
       false;
   Widget settingsPage() {
     final s = c.snapshot!;
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    final colors = Theme.of(context).colorScheme;
+    Widget section(String title, List<Widget> children) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
-        note(
-          'Check in every ${s['intervalSeconds']}s with ${s['graceSeconds']}s to respond. Expires ${at(s['expiresAt'])}.',
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 20, 4, 0),
+          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
         ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Load street map'),
-          subtitle: const Text(
-            'OpenStreetMap receives the viewed map area and IP address. Recorded points work without tiles.',
+        card(children),
+      ],
+    );
+    Widget action(
+      IconData icon,
+      String title,
+      VoidCallback? onTap, {
+      bool destructive = false,
+      String? subtitle,
+    }) => ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: destructive ? colors.error : colors.primary),
+      title: Text(
+        title,
+        style: TextStyle(color: destructive ? colors.error : null),
+      ),
+      subtitle: subtitle == null ? null : Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      children: [
+        section('Appearance', [
+          const Text('The map follows your appearance.'),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final mode in ThemeMode.values)
+                ChoiceChip(
+                  label: Text(
+                    {
+                      'system': 'System',
+                      'light': 'Light',
+                      'dark': 'Dark',
+                    }[mode.name]!,
+                  ),
+                  selected: widget.appearance == mode,
+                  onSelected: (_) => widget.onAppearanceChanged?.call(mode),
+                  materialTapTargetSize: MaterialTapTargetSize.padded,
+                ),
+            ],
           ),
-          value: tiles,
-          onChanged: (value) => setState(() => tiles = value),
-        ),
-        if (!c.guardian) ...[
-          if (c.access?.guardianLink != null &&
-              s['guardianRevokedAt'] == null &&
-              phase != 'resolved') ...[
-            const Text(
-              'Give this private link only to your consenting guardian. They can paste it into KAZE on iPhone or Android.',
+          const Divider(height: 24),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Street map'),
+            subtitle: const Text(
+              'OpenFreeMap serves vector maps using OpenStreetMap data and receives the viewed area and IP address.',
             ),
+            value: tiles,
+            onChanged: (value) => setState(() => tiles = value),
+          ),
+        ]),
+        section('Safety session', [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.schedule_outlined),
+            title: Text(
+              'Check in every ${countdown((s['intervalSeconds'] as num).toInt())}',
+            ),
+            subtitle: Text(
+              '${s['graceSeconds']} seconds to respond · expires ${at(s['expiresAt'])}',
+            ),
+          ),
+          if (!c.guardian && Platform.isAndroid)
+            const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.watch_outlined),
+              title: Text('Watch connects automatically'),
+              subtitle: Text(
+                'Open KAZE on your paired watch, then tap Check in.',
+              ),
+            ),
+        ]),
+        if (!c.guardian &&
+            c.access?.guardianLink != null &&
+            s['guardianRevokedAt'] == null &&
+            phase != 'resolved')
+          section('Your guardian', [
+            const Text(
+              'Give this private link only to the person you trust. They can join on iPhone or Android.',
+            ),
+            const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: () async {
                 await Clipboard.setData(
@@ -507,187 +915,78 @@ class _SessionScreenState extends State<SessionScreen>
                   update();
                 }
               },
-              icon: const Icon(Icons.copy),
+              icon: const Icon(Icons.ios_share),
               label: const Text('Copy guardian link'),
             ),
-            OutlinedButton(
-              onPressed: c.busy
+            const SizedBox(height: 8),
+            action(
+              Icons.person_remove_outlined,
+              'Revoke guardian access',
+              c.busy
                   ? null
                   : () async {
                       if (await confirm('Revoke your guardian’s access now?')) {
                         await c.mutate('revoke-guardian');
                       }
                     },
-              child: const Text('Revoke guardian access'),
+              destructive: true,
             ),
-          ],
-          if (Platform.isAndroid)
-            note(
-              'Galaxy Watch connects automatically when you open KAZE on it. Tap Start there to consent.',
-            ),
-          if (phase != 'resolved')
-            FilledButton(
-              onPressed: c.busy
+          ]),
+        section(c.guardian ? 'Access' : 'Session controls', [
+          if (!c.guardian) ...[
+            if (phase != 'resolved')
+              action(
+                Icons.stop_circle_outlined,
+                'End session and stop sharing',
+                c.busy
+                    ? null
+                    : () async {
+                        if (await confirm(
+                          'End this session and stop guardian sharing?',
+                        )) {
+                          await c.mutate('resolve');
+                        }
+                      },
+                destructive: true,
+                subtitle: 'Stop recording and guardian access.',
+              ),
+            if (phase != 'resolved') const Divider(),
+            action(
+              Icons.delete_outline,
+              'Delete session',
+              c.busy
                   ? null
                   : () async {
                       if (await confirm(
-                        'End this session and stop guardian sharing?',
+                        'Delete the session, its evidence and all access?',
                       )) {
-                        await c.mutate('resolve');
+                        await c.deleteSession();
                       }
                     },
-              child: const Text('End session and stop sharing'),
+              destructive: true,
+              subtitle: 'Permanently remove its recorded evidence.',
             ),
-          OutlinedButton(
-            onPressed: c.busy
-                ? null
-                : () async {
-                    if (await confirm(
-                      'Delete the session, its evidence and all access?',
-                    )) {
-                      await c.deleteSession();
-                    }
-                  },
-            child: const Text('Delete session'),
+            if (phase == 'resolved')
+              action(Icons.add_circle_outline, 'Return to setup', c.forget),
+          ] else
+            action(Icons.link_off, 'Remove this guardian link', c.forget),
+        ]),
+        section('About this prototype', [
+          const Text(
+            'The guardian must keep KAZE open. Calls, SMS, background push and emergency dispatch are not connected.',
           ),
-          if (phase == 'resolved')
-            TextButton(
-              onPressed: c.forget,
-              child: const Text('Return to setup'),
-            ),
-        ] else
-          TextButton(
-            onPressed: c.forget,
-            child: const Text('Remove this guardian link'),
+          note(
+            'Camera direction preview is experimental outdoor guidance. It does not identify rooms, floors or stairs.',
           ),
-        const Divider(),
-        note(
-          'Keep the guardian app open to receive requests. Background push, calls, SMS and emergency dispatch are not connected.',
-        ),
-        note(
-          'Camera direction preview is experimental. It shows an approximate outdoor bearing, not an anchored trail, room, floor or stair route.',
-        ),
-        note(
-          'No custom AI estimator is integrated. Geographic points come from location services.',
-        ),
-      ],
-    );
-  }
-}
-
-class TrailMap extends StatelessWidget {
-  final Map<String, dynamic> snapshot;
-  final bool tiles;
-  const TrailMap({super.key, required this.snapshot, required this.tiles});
-  @override
-  Widget build(BuildContext context) {
-    final geo = snapshot['geography'] as Map?;
-    final latest = geo?['latest'] as Map?;
-    final center = latest == null
-        ? const LatLng(20, 0)
-        : LatLng(
-            (latest['latitude'] as num).toDouble(),
-            (latest['longitude'] as num).toDouble(),
-          );
-    return Stack(
-      children: [
-        FlutterMap(
-          key: ValueKey('${snapshot['id']}-${latest == null}'),
-          options: MapOptions(
-            initialCenter: center,
-            initialZoom: latest == null ? 2 : 17,
+          note(
+            'Location comes from device location services. No custom AI estimator is integrated.',
           ),
-          children: [
-            if (tiles)
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'app.kaze.trail',
-              ),
-            PolylineLayer(
-              polylines: [
-                for (final path in (geo?['paths'] as List? ?? []))
-                  if ((path['points'] as List).length > 1)
-                    Polyline(
-                      points: [
-                        for (final p in path['points'])
-                          LatLng(
-                            (p['latitude'] as num).toDouble(),
-                            (p['longitude'] as num).toDouble(),
-                          ),
-                      ],
-                      strokeWidth: 4,
-                      color: path['source'] == 'phone'
-                          ? Colors.blue.shade700
-                          : Colors.purple,
-                    ),
-              ],
-            ),
-            if (latest != null) ...[
-              CircleLayer(
-                circles: [
-                  CircleMarker(
-                    point: center,
-                    radius: (latest['accuracy'] as num).toDouble(),
-                    useRadiusInMeter: true,
-                    color: Colors.blue.withValues(alpha: .1),
-                    borderStrokeWidth: 1,
-                    borderColor: Colors.blue,
-                  ),
-                ],
-              ),
-              MarkerLayer(
-                markers: [
-                  Marker(
-                    point: center,
-                    width: 36,
-                    height: 36,
-                    child: Semantics(
-                      label: 'Last reported location',
-                      child: Icon(
-                        Icons.person_pin_circle,
-                        size: 36,
-                        color: Color(0xff225cbe),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (tiles)
-              RichAttributionWidget(
-                attributions: [
-                  TextSourceAttribution(
-                    'OpenStreetMap contributors',
-                    onTap: () => launchUrl(
-                      Uri.parse('https://www.openstreetmap.org/copyright'),
-                      mode: LaunchMode.externalApplication,
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-        if (latest == null)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                snapshot['shared'] == true
-                    ? 'No location received yet.\nCheck-ins still work.'
-                    : 'Trail stays private until\na check-in goes unanswered.',
-                textAlign: TextAlign.center,
-              ),
-            ),
+          action(
+            Icons.info_outline,
+            'Licenses & map credits',
+            () => showLicensePage(context: context, applicationName: 'KAZE'),
           ),
-        if (!tiles && latest != null)
-          const Positioned(
-            bottom: 8,
-            left: 8,
-            child: Text(
-              'Recorded coordinates · street map off',
-              style: TextStyle(fontSize: 11),
-            ),
-          ),
+        ]),
       ],
     );
   }

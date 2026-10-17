@@ -61,7 +61,9 @@ Use familiar consumer safety-app patterns. Life360 is a reference for usability,
 - Person card: first name, last update, last accepted check-in and device connection state in plain language.
 - Bottom navigation: Map, Activity, Settings. Put the initial authorized-contact link in the appropriate person/settings view; add a dedicated People tab only when a real multi-person feature exists.
 - Activity: meaningful check-ins, assistance requests and acknowledgments with times.
-- Settings: sharing consent, chosen guardian access, interval, end/delete controls and connection setup.
+- Settings: appearance (remember System/Light/Dark), sharing consent, chosen guardian access, interval, grouped end/delete controls and connection setup.
+- Follow Apple Human Interface Guidelines for hierarchy, scalable text, safe areas, contrast, generous targets and platform conventions. Keep the map dominant, use matching light/dark basemaps, and move detailed readings into a dismissible sheet.
+- The paired watch joins the phone’s consented session on open with no separate Start/enable action; request first-use OS permissions, then expose Check in. Prefer Wear Data Layer through the phone so watch Wi-Fi is optional.
 - Find person: available after an assistance request, opening the map and optional AR mode.
 - Use ordinary text, readable typography, familiar icons, generous touch targets and restrained colors. Use color and text together for status.
 - Avoid chat bubbles, AI assistants, decorative gradients, glowing effects, marketing slogans, excessive metric cards, and raw sensor/AI terminology in normal user flows. Put diagnostic details in a developer view.

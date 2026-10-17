@@ -23,7 +23,7 @@ Uploads use persistent UUIDs and per-source sequences. Unacknowledged batches re
 
 The server must already know the session and remain running to escalate while devices are disconnected. Restart recovers overdue deadlines with delayed delivery. The guardian app/page must remain open; no background push, SMS, phone call or emergency dispatch is configured. Offline queued evidence has not reached the guardian.
 
-Map tiles are optional external OpenStreetMap data. The provider receives the viewed area and IP, as disclosed in setup/settings. The PC still hosts the backend, SQLite and any future inference. No public tunnel is assumed running. Only debug private/local HTTP is supported; release connections require HTTPS.
+The native MapLibre SDK renders OpenFreeMap vector tiles using OpenStreetMap data. OpenFreeMap receives the viewed area and IP, as disclosed in setup/settings. The map uses Positron and Dark styles, keeps separate phone/watch vector paths and real gaps, and draws the reported accuracy radius geodesically. Turning Street map off uses an empty local style, with no external map sources. The PC still hosts the backend, SQLite and any future inference. No public tunnel is assumed running. Only debug private/local HTTP is supported; release connections require HTTPS.
 
 Legacy `src/trail.js` relative step/camera reconstruction and its tests remain for existing stored sessions/queued evidence. The revised phone app does not collect wearer camera images or use that relative path as geographic location. No direction or destination entry is needed.
 
@@ -53,4 +53,4 @@ The local evidence is `artifacts/vivo-flutter-integration.txt` and `artifacts/vi
 
 The production Flutter debug APK was rebuilt and restored on the Vivo after the integration run. Phone Android lint completed successfully, with zero errors (existing dependency/resource warnings remain). Local Flutter-generated Windows SDK paths needed standard Java-properties drive-colon escaping before a fresh lint analysis; the local.properties file is not included in the source bundle. No iOS build result is claimed.
 
-Automatic Watch4 setup is now implemented: start on the Vivo, open KAZE on the paired watch, and tap Start there. The real watch discovered the matching session and uploaded pressure/heartbeat through the paired phone. Detailed current results and remaining gates are in [the verification ledger](VERIFICATION.md).
+Automatic Watch4 setup is now implemented: start on the Vivo, open KAZE on the paired watch, and tap Check in without a separate watch activation step. The real watch discovered the matching session and uploaded pressure/heartbeat through the paired phone. Detailed current results and remaining gates are in [the verification ledger](VERIFICATION.md).

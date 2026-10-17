@@ -23,7 +23,7 @@ It prints a temporary HTTPS address. That address forwards requests through Clou
 1. In the Flutter wearer app, enter the generated HTTPS origin as the PC server URL.
 2. Create and consent to the timed safety session directly in the Flutter app.
 3. The app retains its scoped owner access. Copy its private guardian link in Settings into KAZE on the second iPhone/Android phone. Do not use a localhost link on that second phone.
-4. With the Watch4 already paired to the Vivo in Galaxy Wearable, open KAZE on the watch. It automatically requests the active phone session and receives the same backend URL with watch-scoped access. Tap Start on the watch to consent; no phone Settings configuration transfer is needed.
+4. With the Watch4 already paired to the Vivo in Galaxy Wearable, open KAZE on the watch. It automatically requests the active phone session and receives the same backend URL with watch-scoped access. The watch joins the consented phone session on open; tap Check in without a separate Start/enable action. No phone Settings configuration transfer is needed. Wear Data Layer uses the paired-phone connection, including Bluetooth; watch Wi-Fi is optional.
 5. Share only the guardian link with consenting test contacts. Never share the owner's pairing JSON as a guardian invitation.
 6. Verify the health endpoint at `<HTTPS_ADDRESS>/api/health`, then test the actual authenticated device flow on mobile data.
 
