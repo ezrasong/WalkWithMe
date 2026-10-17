@@ -11,3 +11,15 @@ playwright-report/
 test-results/
 __pycache__/
 *.pyc
+
+# Local planning, device evidence and development helpers.
+/KAZE_BUILD_GOAL.md
+/KAZE_VERIFY_GOAL.md
+/docs/VERIFICATION.md
+/docs/IMPLEMENTATION.md
+/docs/DEMO.md
+/mobile/README.md
+/mobile/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md
+/scripts/device-test-backend.mjs
+/scripts/setup-android.ps1
+/scripts/verify-device-flow.py
