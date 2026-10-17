@@ -2,6 +2,7 @@ package app.kaze.phone;
 import app.kaze.shared.Config;
 import app.kaze.shared.Transport;
 import app.kaze.shared.WatchPairing;
+import app.kaze.shared.MonitoringService;
 import com.google.android.gms.wearable.MessageEvent;
 import com.google.android.gms.wearable.Wearable;
 import com.google.android.gms.wearable.WearableListenerService;
@@ -28,6 +29,7 @@ public final class PhoneRelayService extends WearableListenerService {
             if (owner == null || !owner.id.equals(message.getString("sessionId"))) throw new IllegalStateException("Phone session does not match watch");
             String action = message.getString("action");
             if (!action.equals("") && !action.equals("events") && !action.equals("check-in")) throw new IllegalStateException("Relay action denied");
+            if (message.optBoolean("watchRemindersReady", false)) MonitoringService.noteWatchContact(owner.id);
             // Use watch-scoped access, never the phone's owner credential.
             reply.put("result", Transport.request(new Config(owner.forWatch(), true), action, message.optJSONObject("body")));
         } catch (Exception e) { try { reply.put("relayError", e.getMessage()); if(e instanceof Transport.HttpError) reply.put("httpStatus", ((Transport.HttpError)e).status); } catch (Exception ignored) {} }

@@ -2,6 +2,9 @@ package app.kaze.shared;
 
 import android.app.Activity;
 import android.content.Context;
+import android.app.NotificationManager;
+import android.app.NotificationChannel;
+import android.os.SystemClock;
 import org.json.JSONObject;
 import org.junit.*;
 import org.junit.runner.RunWith;
@@ -9,6 +12,7 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.util.ReflectionHelpers;
+import org.robolectric.Shadows;
 import java.net.ServerSocket;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
@@ -25,6 +29,9 @@ public class MonitoringServiceTest {
         protected boolean isWatch() { return false; }
         protected Class<?> activityClass() { return Activity.class; }
     }
+    public static class TestWatchService extends TestService {
+        protected boolean isWatch() { return true; }
+    }
     private Context context;
     private ServerSocket server;
     private ExecutorService serverWorker;
@@ -33,6 +40,7 @@ public class MonitoringServiceTest {
     private Config config;
     @Before public void setup() throws Exception {
         context = RuntimeEnvironment.getApplication(); context.deleteDatabase("outbox.db");
+        MonitoringService.noteWatchContact("");
         Config.prefs(context).edit().clear().putBoolean("active", true).commit();
         server = new ServerSocket(0); serverWorker = Executors.newSingleThreadExecutor();
         serverWorker.submit(() -> {
@@ -73,5 +81,67 @@ public class MonitoringServiceTest {
         resolved = true; ReflectionHelpers.callInstanceMethod(service, "sync");
         assertEquals(List.of("GET", "POST", "GET"), requests); assertFalse(Config.prefs(context).getBoolean("active", true)); assertEquals(0, box.count(config.id));
         controller.destroy(); box.close();
+    }
+    private void responseDue(MonitoringService service) {
+        service.config = config;
+        Config.prefs(context).edit().putLong("dueAt", System.currentTimeMillis() - 1000).commit();
+        ReflectionHelpers.callInstanceMethod(service, "remind");
+    }
+    @Test public void withoutAnActiveWatchThePhonePostsAVibrationAndSoundEnabledReminder() {
+        var controller = Robolectric.buildService(TestService.class).create();
+        responseDue(controller.get());
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        assertNotNull(Shadows.shadowOf(manager).getNotification(2));
+        NotificationChannel channel = manager.getNotificationChannel(MonitoringService.RESPONSE_CHANNEL);
+        assertNotNull(channel.getSound());
+        assertTrue(channel.shouldVibrate());
+        assertArrayEquals(new long[]{0, 350, 200, 350, 200, 600}, channel.getVibrationPattern());
+        assertTrue(MonitoringService.remindersAvailable(context));
+        controller.destroy();
+    }
+    @Test public void activeWatchSuppressesPhoneUntilContactIsStaleButDoesNotSuppressItself() {
+        var phone = Robolectric.buildService(TestService.class).create();
+        MonitoringService.noteWatchContact(config.id);
+        responseDue(phone.get());
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        assertNull(Shadows.shadowOf(manager).getNotification(2));
+        ReflectionHelpers.setStaticField(MonitoringService.class, "watchSeenAt", SystemClock.elapsedRealtime() - 20000);
+        responseDue(phone.get());
+        assertNotNull(Shadows.shadowOf(manager).getNotification(2));
+        phone.destroy(); manager.cancel(2);
+        var watch = Robolectric.buildService(TestWatchService.class).create();
+        MonitoringService.noteWatchContact(config.id);
+        responseDue(watch.get());
+        assertNotNull(Shadows.shadowOf(manager).getNotification(2));
+        watch.destroy();
+    }
+    @Test public void anotherSessionWatchCannotSuppressThisPhonesReminder() {
+        var phone = Robolectric.buildService(TestService.class).create();
+        MonitoringService.noteWatchContact("bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee");
+        responseDue(phone.get());
+        assertNotNull(Shadows.shadowOf(context.getSystemService(NotificationManager.class)).getNotification(2));
+        phone.destroy();
+    }
+    @Test public void aBlockedReminderChannelDoesNotPostAnAlert() {
+        var phone = Robolectric.buildService(TestService.class).create();
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        manager.deleteNotificationChannel(MonitoringService.RESPONSE_CHANNEL);
+        manager.createNotificationChannel(new NotificationChannel(MonitoringService.RESPONSE_CHANNEL, "Check-in response due", NotificationManager.IMPORTANCE_NONE));
+        responseDue(phone.get());
+        assertFalse(MonitoringService.remindersAvailable(context));
+        assertNull(Shadows.shadowOf(manager).getNotification(2));
+        phone.destroy();
+    }
+    @Test public void reminderChannelMigrationPreservesBlockedImportanceAndMutedSound() {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        NotificationChannel previous = new NotificationChannel("response", "Old check-in reminders", NotificationManager.IMPORTANCE_NONE);
+        previous.setSound(null, null);
+        manager.createNotificationChannel(previous);
+        var phone = Robolectric.buildService(TestService.class).create();
+        NotificationChannel channel = manager.getNotificationChannel(MonitoringService.RESPONSE_CHANNEL);
+        assertEquals(NotificationManager.IMPORTANCE_NONE, channel.getImportance());
+        assertNull(channel.getSound());
+        assertFalse(MonitoringService.remindersAvailable(context));
+        phone.destroy();
     }
 }

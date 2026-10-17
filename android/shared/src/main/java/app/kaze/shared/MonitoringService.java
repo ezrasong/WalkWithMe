@@ -5,6 +5,8 @@ import android.app.*;
 import android.content.*;
 import android.content.pm.PackageManager;
 import android.os.*;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.concurrent.Executors;
@@ -12,6 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public abstract class MonitoringService extends Service implements SensorRecorder.Sink {
+    static final String RESPONSE_CHANNEL = "check-in-reminders";
     public static final String RESPOND = "app.kaze.RESPOND", END = "app.kaze.END", EVENT = "app.kaze.EVENT", REFRESH = "app.kaze.REFRESH";
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
     private SensorRecorder recorder;
@@ -21,6 +24,23 @@ public abstract class MonitoringService extends Service implements SensorRecorde
     private PowerManager.WakeLock wake;
     private volatile boolean stopping;
     private long notifiedDeadline, lastHeartbeat;
+    // Presence is deliberately process-local: after phone restart, fall back to
+    // the phone until the watch contacts this session again.
+    private static volatile String watchSession = "";
+    private static volatile long watchSeenAt;
+    public static synchronized void noteWatchContact(String session) {
+        watchSession = session;
+        watchSeenAt = SystemClock.elapsedRealtime();
+    }
+    private static synchronized boolean watchRecentlySeen(String session) {
+        long age = SystemClock.elapsedRealtime() - watchSeenAt;
+        return session.equals(watchSession) && age >= 0 && age < 20000;
+    }
+    public static boolean remindersAvailable(Context context) {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        NotificationChannel channel = manager.getNotificationChannel(RESPONSE_CHANNEL);
+        return manager.areNotificationsEnabled() && channel != null && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
+    }
     private final Handler reminderHandler = new Handler(Looper.getMainLooper());
     private final Runnable reminderTask = new Runnable() { public void run() { remind(); reminderHandler.postDelayed(this, 1000); } };
     private JSONArray available = new JSONArray();
@@ -30,7 +50,20 @@ public abstract class MonitoringService extends Service implements SensorRecorde
         super.onCreate();
         NotificationManager manager = getSystemService(NotificationManager.class);
         manager.createNotificationChannel(new NotificationChannel("recording", "Active safety session", NotificationManager.IMPORTANCE_LOW));
-        manager.createNotificationChannel(new NotificationChannel("response", "Check-in response due", NotificationManager.IMPORTANCE_HIGH));
+        if (manager.getNotificationChannel(RESPONSE_CHANNEL) == null) {
+            // Channel vibration is immutable after creation. Migrate the old
+            // manual-vibration channel, retaining blocked importance/muted sound.
+            NotificationChannel previous = manager.getNotificationChannel("response");
+            NotificationChannel response = new NotificationChannel(RESPONSE_CHANNEL, "Check-in response due",
+                previous == null ? NotificationManager.IMPORTANCE_HIGH : previous.getImportance());
+            response.setSound(previous == null ? RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) : previous.getSound(),
+                previous != null && previous.getAudioAttributes() != null ? previous.getAudioAttributes()
+                    : new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build());
+            response.enableVibration(true);
+            response.setVibrationPattern(new long[]{0, 350, 200, 350, 200, 600});
+            manager.createNotificationChannel(response);
+            if (previous != null) manager.deleteNotificationChannel("response");
+        }
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (config == null) {
@@ -98,10 +131,16 @@ public abstract class MonitoringService extends Service implements SensorRecorde
         var prefs = Config.prefs(this);
         long due = prefs.getLong("dueAt", 0);
         if (due > 0 && Transport.serverNow(this) >= due && notifiedDeadline != due) {
+            // A paired watch that has not opened/joined KAZE must not suppress
+            // phone reminders. Keep checking so a lost watch falls back within
+            // 20 seconds of its last contact, even after the deadline passed.
+            if (!isWatch() && config != null && watchRecentlySeen(config.id)) return;
             notifiedDeadline = due;
-            Vibrator vibrator = (Vibrator)getSystemService(VIBRATOR_SERVICE);
-            if (vibrator != null && vibrator.hasVibrator()) vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0, 350, 200, 350, 200, 600}, -1));
-            try { getSystemService(NotificationManager.class).notify(2, notification("Response due · are you here?", "response", true)); } catch (SecurityException ignored) {}
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (remindersAvailable(this)) {
+                // The OS owns vibration and sound, including mute and DND.
+                try { manager.notify(2, notification("Response due · are you here?", RESPONSE_CHANNEL, true)); } catch (SecurityException ignored) {}
+            }
         }
     }
     private Notification notification(String text, String channel, boolean response) {

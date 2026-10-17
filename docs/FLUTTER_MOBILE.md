@@ -28,7 +28,7 @@ git clone --branch codex/kaze-flutter-verification https://github.com/ezrasong/h
 cd htv11/mobile
 ```
 
-If you already cloned the repository, run `git fetch origin`, then `git switch codex/kaze-flutter-verification` from that checkout before entering `mobile/`.
+If you already cloned the repository, run `git fetch origin`, `git switch codex/kaze-flutter-verification`, then `git pull --ff-only origin codex/kaze-flutter-verification` from that checkout before entering `mobile/`.
 
 Transfer the source checkout (including `mobile`, `android/shared` and `android/phone`; excluding generated builds, private data and local.properties). Install the same Flutter stable version, Xcode, Xcode command-line tools and the signing requirements shown by `flutter doctor`. From the transferred `mobile/` directory:
 
@@ -85,6 +85,18 @@ After installing both debug apps and pairing the Watch4 with the Vivo in Galaxy 
 There is no manual Pair Galaxy Watch button in the ordinary Flutter flow. The watch receives an allowlisted watch credential, never the owner's or guardian's credential. Discovery cannot replace a starting/active watch session. If there is no active phone session, the idle watch clears stale configuration and says to start on the phone. Foreground discovery retries when a connection is unavailable. ADB wireless pairing is a development installation step, separate from normal KAZE app pairing.
 
 The watch prefers Wear Data Layer through the paired phone, including Bluetooth. It does not require its own Wi-Fi while connected to the phone. The phone still needs a working route to the backend to confirm check-ins. If the phone relay is unavailable, the watch can attempt a direct backend connection over its own network. Offline sensor readings queue locally; an offline check-in is never presented as server-confirmed.
+
+Reminders prefer the active watch: vibration plus the system notification sound when its settings permit. Without an active watch, the phone vibrates and posts its reminder instead. If watch contact stops, phone fallback occurs within 20 seconds of the last contact; pairing hardware without running KAZE does not suppress phone alerts. Disabled watch notifications also allow phone fallback. Notification permissions, mute and Do Not Disturb affect delivery; KAZE does not override them. Only an explicit server-accepted Check in resets the deadline.
+
+### Background verification using normal apps
+
+Install both normal debug APKs, add the phone's USB reverse for 4174, and end any existing disposable session. With port 4174 free, run from the repository root:
+
+```powershell
+python scripts/verify-device-flow.py --phone PHONE_SERIAL --watch WATCH_CONNECTION_ADDRESS --normal-app --managed-backend --long-run
+```
+
+The helper starts the dedicated local backend using `data/device-test.sqlite`. When it prints ready, create a new consented session in the normal Vivo UI within three minutes. Use the watch's ADB connection address, not its pairing-code endpoint. Keep both devices untouched, including when reminders appear. The host opens KAZE on the watch, verifies automatic joining and taps Check in once. Its test backend then closes existing/new device sockets for a bounded outage while keeping the persisted deadline timer running. It requires native offline status and unreceived queued IDs on both devices, checks their delivery after reconnection, and samples screen-off/recording state for 610 seconds. Removing USB forwarding alone is insufficient because existing sockets can survive it. The watch must have no ADB reverse for relay proof. Reports are redacted in `artifacts/device-long-run.json`; failures are not a reliability pass. This mode attempts to end its fresh disposable session and stop its child backend on exit, leaving the ordinary tappable app installed. It does not prove measured walking accuracy, felt/audible alerts, or untethered battery/Doze behavior.
 
 ## Appearance and layout
 

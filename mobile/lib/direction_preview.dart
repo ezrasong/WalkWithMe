@@ -62,16 +62,18 @@ class _DirectionPreviewState extends State<DirectionPreview>
         );
       }
       var permission = await Geolocator.checkPermission();
+      if (closed || !mounted || !authorized) return;
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
+      if (closed || !mounted || !authorized) return;
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         throw StateError('Location permission denied. Use the map.');
       }
       final cameras = await availableCameras();
-      if (cameras.isEmpty) throw StateError('Camera unavailable. Use the map.');
       if (closed || !mounted || !authorized) return;
+      if (cameras.isEmpty) throw StateError('Camera unavailable. Use the map.');
       final c = CameraController(
         cameras.firstWhere(
           (c) => c.lensDirection == CameraLensDirection.back,
