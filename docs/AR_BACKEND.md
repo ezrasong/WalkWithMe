@@ -1,6 +1,6 @@
 # Guardian spatial AR
 
-The backend prepares recorded geographic evidence for a local guardian renderer. Camera processing belongs only to the guardian device. The wearer phone/watch do not record or upload images. The PC performs coordinate geometry; no learned motion model or accuracy improvement is claimed.
+The backend prepares recorded geographic evidence for a local guardian renderer. Camera processing belongs only to the guardian device. The wearer phone/watch do not record or upload images. The PC performs coordinate geometry and preserves the accuracy limits of the original observations.
 
 ## API
 

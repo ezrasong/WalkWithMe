@@ -1021,7 +1021,7 @@ class _SessionScreenState extends State<SessionScreen>
             'Camera direction preview is experimental outdoor guidance. It does not identify rooms, floors or stairs.',
           ),
           note(
-            'Location comes from device location services. No custom AI estimator is integrated.',
+            'Location comes from device location services. Reported uncertainty remains visible.',
           ),
           action(
             Icons.info_outline,

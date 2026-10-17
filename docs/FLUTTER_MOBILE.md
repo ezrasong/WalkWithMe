@@ -35,7 +35,7 @@ An active session publishes a Wear OS Ongoing Activity to keep KAZE available wh
 On a Mac with Flutter and Xcode:
 
 ```sh
-git clone --branch codex/kaze-flutter-verification https://github.com/ezrasong/htv11.git
+git clone --branch kaze-flutter-verification https://github.com/ezrasong/htv11.git
 cd htv11/mobile
 flutter pub get
 flutter build ios --debug --no-codesign
