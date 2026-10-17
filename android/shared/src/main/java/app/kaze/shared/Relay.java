@@ -17,7 +17,7 @@ public final class Relay {
         CompletableFuture<JSONObject> result = new CompletableFuture<>(); pending.put(id, result);
         try {
             JSONObject message = new JSONObject().put("requestId", id).put("sessionId", config.id).put("action", action);
-            message.put("watchRemindersReady", Config.prefs(context).getBoolean("active", false) && MonitoringService.remindersAvailable(context));
+            message.put("watchRemindersReady", Config.prefs(context).getBoolean("active", false) && MonitoringService.vibrationRemindersAvailable(context));
             if (body != null) message.put("body", body);
             var nodes = Tasks.await(Wearable.getNodeClient(context).getConnectedNodes(), 3, TimeUnit.SECONDS);
             if (nodes.isEmpty()) throw new IllegalStateException("No connected phone relay");

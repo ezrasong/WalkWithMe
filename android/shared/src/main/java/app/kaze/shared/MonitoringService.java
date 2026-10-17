@@ -6,7 +6,6 @@ import android.content.*;
 import android.content.pm.PackageManager;
 import android.os.*;
 import android.media.AudioAttributes;
-import android.media.RingtoneManager;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.concurrent.Executors;
@@ -14,7 +13,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public abstract class MonitoringService extends Service implements SensorRecorder.Sink {
-    static final String RESPONSE_CHANNEL = "check-in-reminders";
+    static final String RESPONSE_CHANNEL = "check-in-vibration";
     public static final String RESPOND = "app.kaze.RESPOND", END = "app.kaze.END", EVENT = "app.kaze.EVENT", REFRESH = "app.kaze.REFRESH";
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
     private SensorRecorder recorder;
@@ -41,6 +40,10 @@ public abstract class MonitoringService extends Service implements SensorRecorde
         NotificationChannel channel = manager.getNotificationChannel(RESPONSE_CHANNEL);
         return manager.areNotificationsEnabled() && channel != null && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
+    public static boolean vibrationRemindersAvailable(Context context) {
+        return remindersAvailable(context) && context.getSystemService(NotificationManager.class)
+            .getNotificationChannel(RESPONSE_CHANNEL).shouldVibrate();
+    }
     private final Handler reminderHandler = new Handler(Looper.getMainLooper());
     private final Runnable reminderTask = new Runnable() { public void run() { remind(); reminderHandler.postDelayed(this, 1000); } };
     private JSONArray available = new JSONArray();
@@ -51,18 +54,19 @@ public abstract class MonitoringService extends Service implements SensorRecorde
         NotificationManager manager = getSystemService(NotificationManager.class);
         manager.createNotificationChannel(new NotificationChannel("recording", "Active safety session", NotificationManager.IMPORTANCE_LOW));
         if (manager.getNotificationChannel(RESPONSE_CHANNEL) == null) {
-            // Channel vibration is immutable after creation. Migrate the old
-            // manual-vibration channel, retaining blocked importance/muted sound.
-            NotificationChannel previous = manager.getNotificationChannel("response");
+            // Sound is immutable after creation. Migrate to vibration only,
+            // retaining blocked importance and an existing vibration opt-out.
+            NotificationChannel previous = manager.getNotificationChannel("check-in-reminders");
+            boolean vibration = previous == null || previous.shouldVibrate();
+            if (previous == null) previous = manager.getNotificationChannel("response");
             NotificationChannel response = new NotificationChannel(RESPONSE_CHANNEL, "Check-in response due",
                 previous == null ? NotificationManager.IMPORTANCE_HIGH : previous.getImportance());
-            response.setSound(previous == null ? RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) : previous.getSound(),
-                previous != null && previous.getAudioAttributes() != null ? previous.getAudioAttributes()
-                    : new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build());
-            response.enableVibration(true);
+            response.setSound(null, new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build());
             response.setVibrationPattern(new long[]{0, 350, 200, 350, 200, 600});
+            response.enableVibration(vibration);
             manager.createNotificationChannel(response);
-            if (previous != null) manager.deleteNotificationChannel("response");
+            manager.deleteNotificationChannel("check-in-reminders");
+            manager.deleteNotificationChannel("response");
         }
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {

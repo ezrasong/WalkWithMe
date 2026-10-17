@@ -231,7 +231,9 @@ def long_run(session):
     cutoff=int(time.time()*1000)-600000
     report['screenOffEvidenceBySource']={source:sum(e['source']==source and e['at']>=cutoff for e in events) for source in ('phone','watch')}
     if not all(report['screenOffEvidenceBySource'].values()): raise RuntimeError('No recorded evidence from one source during the screen-off interval.')
-    report['humanFeltVibration']=False
+    # This host cannot measure human perception. Record that separately from
+    # system vibration metadata, rather than reporting an unobserved negative.
+    report['humanFeltVibration']=None
     wake_devices()
 
 if not args.normal_app and ('All tests passed!' in log_text() or 'Some tests failed' in log_text()):

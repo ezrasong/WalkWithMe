@@ -87,13 +87,13 @@ public class MonitoringServiceTest {
         Config.prefs(context).edit().putLong("dueAt", System.currentTimeMillis() - 1000).commit();
         ReflectionHelpers.callInstanceMethod(service, "remind");
     }
-    @Test public void withoutAnActiveWatchThePhonePostsAVibrationAndSoundEnabledReminder() {
+    @Test public void withoutAnActiveWatchThePhonePostsAVibrationOnlyReminder() {
         var controller = Robolectric.buildService(TestService.class).create();
         responseDue(controller.get());
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         assertNotNull(Shadows.shadowOf(manager).getNotification(2));
         NotificationChannel channel = manager.getNotificationChannel(MonitoringService.RESPONSE_CHANNEL);
-        assertNotNull(channel.getSound());
+        assertNull(channel.getSound());
         assertTrue(channel.shouldVibrate());
         assertArrayEquals(new long[]{0, 350, 200, 350, 200, 600}, channel.getVibrationPattern());
         // Wear OS's local notification collector reads these compatibility
@@ -102,6 +102,7 @@ public class MonitoringServiceTest {
         assertArrayEquals(channel.getVibrationPattern(), posted.vibrate);
         assertEquals(channel.getSound(), posted.sound);
         assertTrue(MonitoringService.remindersAvailable(context));
+        assertTrue(MonitoringService.vibrationRemindersAvailable(context));
         controller.destroy();
     }
     @Test public void activeWatchSuppressesPhoneUntilContactIsStaleButDoesNotSuppressItself() {
@@ -118,6 +119,8 @@ public class MonitoringServiceTest {
         MonitoringService.noteWatchContact(config.id);
         responseDue(watch.get());
         assertNotNull(Shadows.shadowOf(manager).getNotification(2));
+        assertNull(Shadows.shadowOf(manager).getNotification(2).sound);
+        assertArrayEquals(new long[]{0, 350, 200, 350, 200, 600}, Shadows.shadowOf(manager).getNotification(2).vibrate);
         watch.destroy();
     }
     @Test public void anotherSessionWatchCannotSuppressThisPhonesReminder() {
@@ -158,6 +161,36 @@ public class MonitoringServiceTest {
         responseDue(phone.get());
         var posted = Shadows.shadowOf(manager).getNotification(2);
         assertNotNull(posted); assertNull(posted.sound); assertNull(posted.vibrate);
+        assertFalse(MonitoringService.vibrationRemindersAvailable(context));
+        phone.destroy();
+    }
+    @Test public void soundingChannelMigratesToVibrationOnlyWithoutEnablingDisabledVibration() {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        NotificationChannel previous = new NotificationChannel("check-in-reminders", "Old reminders", NotificationManager.IMPORTANCE_HIGH);
+        previous.setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI, null);
+        previous.enableVibration(false);
+        manager.createNotificationChannel(previous);
+        var phone = Robolectric.buildService(TestService.class).create();
+        responseDue(phone.get());
+        NotificationChannel channel = manager.getNotificationChannel(MonitoringService.RESPONSE_CHANNEL);
+        assertNull(channel.getSound()); assertFalse(channel.shouldVibrate());
+        assertFalse(MonitoringService.vibrationRemindersAvailable(context));
+        var posted = Shadows.shadowOf(manager).getNotification(2);
+        assertNull(posted.sound); assertNull(posted.vibrate);
+        assertNull(manager.getNotificationChannel("check-in-reminders"));
+        phone.destroy();
+    }
+    @Test public void soundingVibratingChannelKeepsVibrationAndBlockedImportanceOnMigration() {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        NotificationChannel previous = new NotificationChannel("check-in-reminders", "Old reminders", NotificationManager.IMPORTANCE_NONE);
+        previous.setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI, null);
+        previous.enableVibration(true);
+        manager.createNotificationChannel(previous);
+        var phone = Robolectric.buildService(TestService.class).create();
+        NotificationChannel channel = manager.getNotificationChannel(MonitoringService.RESPONSE_CHANNEL);
+        assertNull(channel.getSound()); assertTrue(channel.shouldVibrate());
+        assertEquals(NotificationManager.IMPORTANCE_NONE, channel.getImportance());
+        assertFalse(MonitoringService.remindersAvailable(context));
         phone.destroy();
     }
 }
