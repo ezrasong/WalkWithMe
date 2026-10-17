@@ -8,6 +8,8 @@ import java.io.ByteArrayOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import android.net.Network;
+import java.util.function.Consumer;
 
 public final class Transport {
     public static final class HttpError extends Exception {
@@ -28,13 +30,25 @@ public final class Transport {
         }
     }
     public static JSONObject request(Config config, String action, JSONObject body) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(config.baseUrl + "/api/sessions/" + config.id + (action.isEmpty() ? "" : "/" + action)).openConnection();
+        return request(config, action, body == null ? null : body.toString().getBytes(StandardCharsets.UTF_8), "application/json", null, connection -> {});
+    }
+    // Motion uploads bind to the approved network, so Wi-Fi loss cannot silently
+    // move a raw-data request onto cellular. The caller can cancel its own request.
+    public static JSONObject motion(Config config, byte[] gzip, Network network, Consumer<HttpURLConnection> opened) throws Exception {
+        return request(config, "motion", gzip, "application/gzip", network, opened);
+    }
+    private static JSONObject request(Config config, String action, byte[] payload, String contentType, Network network, Consumer<HttpURLConnection> opened) throws Exception {
+        URL url = new URL(config.baseUrl + "/api/sessions/" + config.id + (action.isEmpty() ? "" : "/" + action));
+        HttpURLConnection connection = (HttpURLConnection)(network == null ? url.openConnection() : network.openConnection(url));
         connection.setConnectTimeout(5000); connection.setReadTimeout(5000); connection.setInstanceFollowRedirects(false);
         connection.setRequestProperty("Authorization", "Bearer " + config.token);
         try {
-            if (body != null) {
-                connection.setRequestMethod("POST"); connection.setDoOutput(true); connection.setRequestProperty("Content-Type", "application/json");
-                try (var output = connection.getOutputStream()) { output.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
+            opened.accept(connection);
+            if (payload != null) {
+                connection.setRequestMethod("POST"); connection.setDoOutput(true); connection.setRequestProperty("Content-Type", contentType);
+                connection.setFixedLengthStreamingMode(payload.length);
+                if (action.equals("motion")) connection.setRequestProperty("X-Kaze-Motion-Consent", "1");
+                try (var output = connection.getOutputStream()) { output.write(payload); }
             }
             int status = connection.getResponseCode();
             InputStream input = status >= 200 && status < 300 ? connection.getInputStream() : connection.getErrorStream();

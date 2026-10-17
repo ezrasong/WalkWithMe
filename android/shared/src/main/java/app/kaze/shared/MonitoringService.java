@@ -18,6 +18,7 @@ public abstract class MonitoringService extends Service implements SensorRecorde
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
     private SensorRecorder recorder;
     private LocationRecorder locations;
+    private MotionCapture motion;
     private Outbox outbox;
     protected Config config;
     private PowerManager.WakeLock wake;
@@ -87,11 +88,17 @@ public abstract class MonitoringService extends Service implements SensorRecorde
             if (isWatch()) WatchPairing.finishStart();
             outbox = new Outbox(this); recorder = new SensorRecorder(this, config, this); available = recorder.start();
             locations = new LocationRecorder(this, config, this); locations.start();
+            if (!isWatch()) motion = new MotionCapture(this);
             wake = ((PowerManager)getSystemService(POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "kaze:armed-trail"); wake.acquire(8 * 60 * 60 * 1000L);
             worker.scheduleWithFixedDelay(this::sync, 0, 5, TimeUnit.SECONDS);
             reminderHandler.post(reminderTask);
         }
         String action = intent == null ? "" : intent.getAction();
+        if ("app.kaze.START_MOTION".equals(action) && motion != null) {
+            try { motion.start(config, intent.getBooleanExtra("streaming", false), intent.getBooleanExtra("cellular", false)); }
+            catch (Exception e) { Config.prefs(this).edit().putString("motionStatus", e.getMessage()).apply(); }
+        }
+        if ("app.kaze.STOP_MOTION".equals(action) && motion != null) motion.stop("user-stopped");
         if (REFRESH.equals(action)) worker.execute(this::sync);
         if (RESPOND.equals(action) || END.equals(action)) worker.execute(() -> {
             try {
@@ -171,6 +178,8 @@ public abstract class MonitoringService extends Service implements SensorRecorde
     private void status(String message) { Config.prefs(this).edit().putString("status", message).apply(); }
     private synchronized void stopConfirmed() {
         stopping = true;
+        try { if (motion != null) motion.stop("session-ended"); if (!isWatch()) MotionCapture.delete(this); }
+        catch (Exception ignored) { /* Evaluation storage must never block session shutdown. */ }
         Config.prefs(this).edit().putBoolean("active", false).apply();
         if (outbox != null && config != null) outbox.deleteSession(config.id);
         getSystemService(NotificationManager.class).cancel(2); stopSelf();
@@ -183,6 +192,7 @@ public abstract class MonitoringService extends Service implements SensorRecorde
     @Override public IBinder onBind(Intent intent) { return null; }
     @Override public void onDestroy() {
         stopping = true;
+        try { if (motion != null) motion.stop("service-stopped"); } catch (Exception ignored) {}
         if (recorder != null) recorder.stop(); if (locations != null) locations.stop(); reminderHandler.removeCallbacks(reminderTask); worker.shutdownNow();
         if (wake != null && wake.isHeld()) wake.release();
         // SQLiteOpenHelper remains owned by the service's in-flight worker until it exits.

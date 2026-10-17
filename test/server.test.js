@@ -6,18 +6,68 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/server.js';
 
+const motionBatch = Buffer.from([0x1f, 0x8b, 8, 0]);
+const motionHeaders = { 'Content-Type': 'application/gzip', 'X-Kaze-Motion-Consent': '1' };
+
 async function fixture(t, opts = {}) {
   let clock = 1792216000000;
   const app = createApp({ now: () => clock, ...opts }); app.server.listen(0, '127.0.0.1'); await once(app.server, 'listening');
   const base = `http://127.0.0.1:${app.server.address().port}`;
   const request = async (route, { token, body, method = body ? 'POST' : 'GET', headers = {} } = {}) => {
-    const response = await fetch(base + route, { method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined });
+    const response = await fetch(base + route, { method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers }, body: body ? (Buffer.isBuffer(body) ? body : JSON.stringify(body)) : undefined });
     return { status: response.status, body: await response.json() };
   };
   const create = async () => (await request('/api/sessions', { body: { consent: true, simulation: true, name: 'Alex', origin: 'Private entrance', intervalSeconds: 5, graceSeconds: 3 } })).body;
   t.after(async () => { if (app.server.listening) await new Promise(resolve => app.server.close(resolve)); });
   return { app, base, request, create, time: () => clock, jump: ms => { clock += ms; app.tick(); } };
 }
+
+test('motion batches require owner consent, are rate bounded and cannot alter safety evidence', async t => {
+  let evaluations = 0;
+  const motion = { close() {}, async evaluate() {
+    evaluations++;
+    return { captureStartedUtcMs: 1792216000000, geographic: false, guidanceAllowed: false, segments: [] };
+  } };
+  const f = await fixture(t, { motion }), s = await f.create(), url = `/api/sessions/${s.id}/motion`;
+  const send = (token = s.ownerToken, body = motionBatch, headers = motionHeaders) => f.request(url, { token, body, headers });
+  assert.equal((await send(s.guardianToken)).status, 401);
+  assert.equal((await send(s.watchToken)).status, 401);
+  assert.equal((await send(s.ownerToken, motionBatch, { 'Content-Type': 'application/gzip' })).status, 400);
+  assert.equal((await send(s.ownerToken, Buffer.from('!bad'))).status, 400);
+  assert.equal((await send(s.ownerToken, Buffer.alloc(180001))).status, 413);
+  const before = f.app.store.get(s.id), activity = f.app.store.activity(s.id);
+  assert.equal((await send()).status, 200);
+  assert.equal((await send()).status, 429);
+  assert.equal(evaluations, 1);
+  assert.deepEqual(f.app.store.get(s.id), before);
+  assert.deepEqual(f.app.store.events(s.id), []);
+  assert.deepEqual(f.app.store.activity(s.id), activity);
+  f.jump(8000);
+  assert.equal((await send()).status, 200);
+  await f.request(`/api/sessions/${s.id}/resolve`, { token: s.ownerToken, body: { confirm: true } });
+  assert.equal((await send()).status, 409);
+});
+
+test('motion result is discarded if its session ends during processing', async t => {
+  let finish, started;
+  const processing = new Promise(resolve => { started = resolve; });
+  const motion = { close() {}, evaluate() { started(); return new Promise(resolve => { finish = resolve; }); } };
+  const f = await fixture(t, { motion }), s = await f.create(), url = `/api/sessions/${s.id}`;
+  const pending = f.request(`${url}/motion`, { token: s.ownerToken, body: motionBatch, headers: motionHeaders });
+  await processing;
+  await f.request(`${url}/resolve`, { token: s.ownerToken, body: { confirm: true } });
+  finish({ captureStartedUtcMs: f.time() });
+  assert.equal((await pending).status, 409);
+});
+
+test('motion result refuses stale batches and expired access', async t => {
+  const motion = { close() {}, async evaluate() { return { captureStartedUtcMs: 0 }; } };
+  const f = await fixture(t, { motion }), s = await f.create(), url = `/api/sessions/${s.id}/motion`;
+  const send = () => f.request(url, { token: s.ownerToken, body: motionBatch, headers: motionHeaders });
+  assert.equal((await send()).status, 400);
+  f.jump(8 * 3600000);
+  assert.equal((await send()).status, 401);
+});
 test('guardian sees neither route nor origin before an alert, even with a valid private link', async t => {
   const f = await fixture(t), s = await f.create(), url = `/api/sessions/${s.id}`;
   await f.request(`${url}/events`, { token: s.ownerToken, body: { events: [{ id: 's', source: 'phone', seq: 1, at: f.time(), type: 'step', heading: 90 }] } });

@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'session.dart';
 import 'direction_preview.dart';
 import 'guardian_ar.dart';
+import 'motion_capture.dart';
 import 'device_setup.dart';
 import 'trail_map.dart';
 export 'trail_map.dart';
@@ -889,6 +890,17 @@ class _SessionScreenState extends State<SessionScreen>
             openDeviceSetup,
             subtitle: 'Location, reminders and background settings.',
           ),
+          if (Platform.isAndroid && !c.guardian)
+            action(
+              Icons.sensors,
+              'Motion trail evaluation',
+              () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MotionCapturePage(session: c),
+                ),
+              ),
+              subtitle: 'Optional capture and Wi-Fi streaming for a walking test.',
+            ),
         ]),
         section('Appearance', [
           const Text('The map follows your appearance.'),

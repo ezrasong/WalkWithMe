@@ -36,3 +36,5 @@ Start a session on the phone, open KAZE on the paired watch, and share the guard
 Wearer recording runs on Android. iPhone guardian flows are tested in the iOS Simulator; signed builds and physical-device verification are still needed. Run `npm run test:ios` on a configured Mac for the guardian regression suite. Keep the guardian app open; background push and emergency dispatch are not implemented.
 
 Experimental [guardian spatial AR](docs/AR_BACKEND.md) uses native ARKit/RealityKit or ARCore and a measured outdoor walking baseline to register supported recorded observations. Unknown heights, poor registration and excessive uncertainty require the map. Physical accuracy and two-phone operation still need verification. The separate compass preview remains unregistered.
+
+Optional [motion trail evaluation](docs/MOTION_EVALUATION.md) captures wearer-phone motion and streams compressed batches to the backend over Wi-Fi for a measured comparison. Cellular is off by default. It does not change shared trails or safety-session behavior.
