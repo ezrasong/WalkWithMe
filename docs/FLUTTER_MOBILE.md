@@ -57,7 +57,7 @@ The map uses native MapLibre rendering with OpenFreeMap vector tiles and light P
 
 ## Optional camera preview
 
-Only a guardian in an authorized active assistance request can open Camera direction preview. Camera frames stay on that phone; there is no recording/upload. This is an experimental outdoor compass bearing to the last geographic point, not ARCore/ARKit shared spatial alignment. It requires current guardian position/heading and sufficiently fresh, accurate, non-mock wearer evidence. Missing or poor evidence falls back to the map. No floor/stair/room/obstacle path is fabricated.
+Only a guardian in an authorized active assistance request can open Camera direction preview. Camera frames stay on that phone; there is no recording/upload. This is an experimental outdoor compass bearing to the last geographic point, not ARCore/ARKit shared spatial alignment. It requires current guardian position/heading and sufficiently fresh, accurate, non-mock wearer evidence. Missing or poor evidence falls back to the map. Mock locations on either phone, unknown compass accuracy, and compass deviation above 30 degrees cannot produce a direction cue. No floor/stair/room/obstacle path is fabricated.
 
 Do not claim precise AR breadcrumbs or measured direction accuracy before a physical two-phone test. Permissions, app backgrounding, lost authorization and camera failure leave the server deadline independent.
 

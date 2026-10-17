@@ -111,9 +111,7 @@ class _DirectionPreviewState extends State<DirectionPreview>
         (e) {
           if (mounted) {
             setState(() {
-              heading = e.accuracy != null && e.accuracy! < 0
-                  ? null
-                  : e.heading;
+              heading = directionHeading(e);
               headingAt = DateTime.now();
             });
           }
@@ -167,47 +165,6 @@ class _DirectionPreviewState extends State<DirectionPreview>
     super.dispose();
   }
 
-  String cue() {
-    final target = widget.session.snapshot?['geography']?['latest'] as Map?;
-    final p = position;
-    if (!authorized ||
-        target == null ||
-        p == null ||
-        heading == null ||
-        headingAt == null ||
-        DateTime.now().difference(headingAt!).inSeconds > 3 ||
-        DateTime.now().difference(p.timestamp).inSeconds > 10 ||
-        widget.session.serverNow - (target['fixAt'] as num) > 30000 ||
-        (target['accuracy'] as num) > 20 ||
-        p.accuracy > 20 ||
-        target['mock'] == true) {
-      return 'Use the map: direction requires fresh outdoor locations with reported accuracy of 20 m or better and a current compass heading.';
-    }
-    final lat = (target['latitude'] as num).toDouble(),
-        lon = (target['longitude'] as num).toDouble();
-    final distance = Geolocator.distanceBetween(
-      p.latitude,
-      p.longitude,
-      lat,
-      lon,
-    );
-    if (distance <= p.accuracy + (target['accuracy'] as num)) {
-      return 'Within combined reported location uncertainty. No precise direction is supported.';
-    }
-    final bearing = Geolocator.bearingBetween(
-      p.latitude,
-      p.longitude,
-      lat,
-      lon,
-    );
-    final turn = ((bearing - heading! + 540) % 360) - 180;
-    return 'Approximate outdoor cue: ${turn.abs() < 20
-        ? 'ahead'
-        : turn > 0
-        ? 'turn right'
-        : 'turn left'} · ${distance.round()} m to last recorded point. Compass alignment is unvalidated.';
-  }
-
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Camera direction preview')),
@@ -232,7 +189,21 @@ class _DirectionPreviewState extends State<DirectionPreview>
           ),
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Semantics(liveRegion: true, child: Text(cue())),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                directionCue(
+                  authorized: authorized,
+                  target:
+                      widget.session.snapshot?['geography']?['latest'] as Map?,
+                  position: position,
+                  heading: heading,
+                  headingAt: headingAt,
+                  now: DateTime.now(),
+                  serverNow: widget.session.serverNow,
+                ),
+              ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(16),
@@ -245,4 +216,64 @@ class _DirectionPreviewState extends State<DirectionPreview>
       ),
     ),
   );
+}
+
+String directionCue({
+  required bool authorized,
+  required Map? target,
+  required Position? position,
+  required double? heading,
+  required DateTime? headingAt,
+  required DateTime now,
+  required int serverNow,
+}) {
+  final p = position;
+  if (!authorized ||
+      target == null ||
+      p == null ||
+      heading == null ||
+      headingAt == null ||
+      now.difference(headingAt).inSeconds > 3 ||
+      now.difference(p.timestamp).inSeconds > 10 ||
+      serverNow - (target['fixAt'] as num) > 30000 ||
+      (target['accuracy'] as num) > 20 ||
+      p.accuracy > 20 ||
+      p.isMocked ||
+      target['mock'] == true) {
+    return 'Use the map: direction requires fresh outdoor locations with reported accuracy of 20 m or better and a current compass heading.';
+  }
+  final lat = (target['latitude'] as num).toDouble(),
+      lon = (target['longitude'] as num).toDouble();
+  final distance = Geolocator.distanceBetween(
+    p.latitude,
+    p.longitude,
+    lat,
+    lon,
+  );
+  if (distance <= p.accuracy + (target['accuracy'] as num)) {
+    return 'Within combined reported location uncertainty. No precise direction is supported.';
+  }
+  final bearing = Geolocator.bearingBetween(p.latitude, p.longitude, lat, lon);
+  final turn = ((bearing - heading + 540) % 360) - 180;
+  return 'Approximate outdoor cue: ${turn.abs() < 20
+      ? 'ahead'
+      : turn > 0
+      ? 'turn right'
+      : 'turn left'} · ${distance.round()} m to last recorded point. Compass alignment is unvalidated.';
+}
+
+double? directionHeading(CompassEvent event) {
+  final accuracy = event.accuracy;
+  final heading = event.heading;
+  // The plugin maps unknown accuracy to null; Android's low precision
+  // category is 45 degrees. Neither supports a useful turn indication.
+  if (accuracy == null ||
+      !accuracy.isFinite ||
+      accuracy < 0 ||
+      accuracy > 30 ||
+      heading == null ||
+      !heading.isFinite) {
+    return null;
+  }
+  return heading;
 }
