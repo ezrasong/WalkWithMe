@@ -148,7 +148,16 @@ public abstract class MonitoringService extends Service implements SensorRecorde
         Notification.Builder builder = new Notification.Builder(this, channel).setSmallIcon(android.R.drawable.ic_dialog_map)
             .setContentTitle("KAZE · team simulation").setContentText(text).setOngoing(!response)
             .setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-        if (response) builder.addAction(new Notification.Action.Builder(null, "I'm here", PendingIntent.getService(this, 1, new Intent(this, getClass()).setAction(RESPOND), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT)).build());
+        if (response) {
+            // Wear OS's local collector also reads the legacy alert fields.
+            // Mirror the effective channel so compatibility cannot unmute it.
+            NotificationChannel settings = getSystemService(NotificationManager.class).getNotificationChannel(channel);
+            if (settings != null) {
+                builder.setVibrate(settings.shouldVibrate() ? settings.getVibrationPattern() : null);
+                builder.setSound(settings.getSound(), settings.getAudioAttributes());
+            }
+            builder.addAction(new Notification.Action.Builder(null, "I'm here", PendingIntent.getService(this, 1, new Intent(this, getClass()).setAction(RESPOND), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT)).build());
+        }
         if (!isWatch()) builder.addAction(new Notification.Action.Builder(null, "End session", PendingIntent.getService(this, 2, new Intent(this, getClass()).setAction(END), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT)).build());
         return builder.build();
     }

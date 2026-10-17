@@ -96,6 +96,11 @@ public class MonitoringServiceTest {
         assertNotNull(channel.getSound());
         assertTrue(channel.shouldVibrate());
         assertArrayEquals(new long[]{0, 350, 200, 350, 200, 600}, channel.getVibrationPattern());
+        // Wear OS's local notification collector reads these compatibility
+        // fields even when the Android framework resolves the channel itself.
+        var posted = Shadows.shadowOf(manager).getNotification(2);
+        assertArrayEquals(channel.getVibrationPattern(), posted.vibrate);
+        assertEquals(channel.getSound(), posted.sound);
         assertTrue(MonitoringService.remindersAvailable(context));
         controller.destroy();
     }
@@ -142,6 +147,17 @@ public class MonitoringServiceTest {
         assertEquals(NotificationManager.IMPORTANCE_NONE, channel.getImportance());
         assertNull(channel.getSound());
         assertFalse(MonitoringService.remindersAvailable(context));
+        phone.destroy();
+    }
+    @Test public void compatibilityFieldsCannotUnmuteAnExistingQuietChannel() {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        NotificationChannel quiet = new NotificationChannel(MonitoringService.RESPONSE_CHANNEL, "Check-in response due", NotificationManager.IMPORTANCE_HIGH);
+        quiet.setSound(null, null); quiet.enableVibration(false);
+        manager.createNotificationChannel(quiet);
+        var phone = Robolectric.buildService(TestService.class).create();
+        responseDue(phone.get());
+        var posted = Shadows.shadowOf(manager).getNotification(2);
+        assertNotNull(posted); assertNull(posted.sound); assertNull(posted.vibrate);
         phone.destroy();
     }
 }

@@ -22,7 +22,10 @@ parser.add_argument('--managed-backend', action='store_true', help='Start the de
 args = parser.parse_args()
 if args.managed_backend and not args.normal_app:
     parser.error('--managed-backend requires --normal-app')
-ADB = shutil.which('adb') or str(Path.home()/'.cache/kaze-android-sdk/platform-tools/adb.exe')
+cached_adb = Path.home()/'.cache/kaze-android-sdk/platform-tools'/('adb.exe' if os.name=='nt' else 'adb')
+ADB = str(cached_adb) if cached_adb.is_file() else shutil.which('adb')
+if not ADB:
+    parser.error('ADB is unavailable; install the Android SDK platform tools first.')
 LOG = ROOT/args.log
 REPORT = ROOT/'artifacts'/('device-long-run.json' if args.long_run else 'watch-checkin-shutdown.json')
 report = {'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'longRun': args.long_run, 'passed': False}
