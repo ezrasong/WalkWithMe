@@ -9,15 +9,17 @@ import { Problem, token, hash, matches, number, label, advance, validateEvent } 
 import { reconstruct } from './trail.js';
 import { geographicTrail } from './locations.js';
 import { guardianArTrail } from './ar.js';
+import { applePushFromEnv, GuardianPushDelivery } from './apple-push.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000 } = {}) {
+export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, applePush = null } = {}) {
   const store = new Store(dbPath), limits = new Map();
   function current(id) {
     let s = store.get(id);
     if (!s) throw new Problem(404, 'Session not found');
     const updated = advance(s, now());
     if (updated.phase === 'expired' && s.phase !== 'expired') { store.clearEvents(s.id); updated.origin = 'Expired'; updated.name = 'Expired session'; }
+    if (['expired', 'resolved'].includes(updated.phase)) store.removeGuardianPush(id);
     if (JSON.stringify(updated) !== JSON.stringify(s)) store.transaction(() => {
       store.save(updated);
       if (updated.phase !== s.phase && updated.phase !== 'expired') store.recordActivity(s.id, updated.phase, updated.escalatedAt ?? s.dueAt, 'server');
@@ -83,9 +85,26 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000 }
           initialHeading: number(b.initialHeading ?? 0, 0, 360, 'initial heading'), ownerHash: hash(owner), guardianHash: hash(guardian), watchHash: hash(watch) };
         store.save(s); store.recordActivity(s.id, 'started', now(), 'owner'); return json(201, { ...snapshot(s, 'owner'), ownerToken: owner, guardianToken: guardian, watchToken: watch });
       }
-      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status))?$/.exec(url.pathname);
+      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push))?$/.exec(url.pathname);
       if (match) {
         const id = match[1], action = match[2]; let s = current(id);
+        if (action === 'guardian-push') {
+          auth(req, s, ['guardian']);
+          if (!['POST', 'DELETE'].includes(req.method)) throw new Problem(405, 'Method not allowed');
+          const b = await body(req); s = current(id); auth(req, s, ['guardian']);
+          if (typeof b.registrationId !== 'string' || !/^[a-f0-9-]{36}$/i.test(b.registrationId)) throw new Problem(400, 'Invalid push registration');
+          if (req.method === 'DELETE') { store.removeGuardianPush(id, b.registrationId); return json(200, { registered: false }); }
+          if (s.phase === 'resolved') throw new Problem(409, 'Session has ended');
+          if (!applePush) throw new Problem(503, 'Apple push is not configured on this server. Local review reminders remain available.');
+          if (b.environment !== applePush.environment || typeof b.deviceToken !== 'string' || !/^[a-f0-9]{64,200}$/i.test(b.deviceToken)) throw new Problem(400, 'Invalid Apple push token or environment');
+          const previous = store.guardianPush(id, b.registrationId);
+          if (!previous && store.guardianPushes().filter(p => p.sessionId === id).length >= 5) throw new Problem(429, 'Guardian device limit reached');
+          store.saveGuardianPush({ sessionId: id, registrationId: b.registrationId, guardianHash: s.guardianHash,
+            token: b.deviceToken.toLowerCase(),
+            generation: previous?.token === b.deviceToken.toLowerCase() ? previous.generation : randomUUID(),
+            acceptedAt: previous?.token === b.deviceToken.toLowerCase() ? previous.acceptedAt : null, nextAttemptAt: 0 });
+          return json(200, { registered: true });
+        }
         if (action === 'guardian-status') {
           auth(req, s, ['guardian']);
           if (req.method !== 'GET') throw new Problem(405, 'Method not allowed');
@@ -117,6 +136,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000 }
           if (action === 'revoke-guardian') {
             if (b.confirm !== true) throw new Problem(400, 'Explicit confirmation required');
             s.guardianHash = hash(token()); s.guardianRevokedAt = now(); s.liveSharing = false;
+            store.removeGuardianPush(id);
           }
           if (action === 'events') {
             if (!Array.isArray(b.events) || b.events.length < 1 || b.events.length > 100) throw new Problem(400, 'Expected 1–100 events');
@@ -138,7 +158,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000 }
             if (action === 'acknowledge') s.acknowledgedAt ??= now();
             else s.arrivalReportedAt ??= now();
           }
-          if (action === 'resolve') { if (b.confirm !== true) throw new Problem(400, 'Explicit confirmation required'); s.phase = 'resolved'; s.resolvedAt = now(); }
+          if (action === 'resolve') { if (b.confirm !== true) throw new Problem(400, 'Explicit confirmation required'); s.phase = 'resolved'; s.resolvedAt = now(); store.removeGuardianPush(id); }
           store.transaction(() => { store.save(s); store.recordActivity(id, action, now(), role); }); return json(200, snapshot(s, role));
         }
         throw new Problem(405, 'Method not allowed');
@@ -151,12 +171,14 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000 }
       throw new Problem(404, 'Not found');
     } catch (e) { if (!res.headersSent) json(e.status ?? 500, { error: e.status ? e.message : 'Internal server error' }); else res.end(); }
   });
-  const timer = setInterval(() => { for (const s of store.all()) current(s.id); }, tickMs); timer.unref();
-  server.on('close', () => { clearInterval(timer); store.close(); });
-  return { server, store, tick: () => { for (const s of store.all()) current(s.id); } };
+  const push = new GuardianPushDelivery(store, applePush, current, now);
+  const tick = () => { for (const s of store.all()) current(s.id); return push.flush(); };
+  const timer = setInterval(() => { void tick().catch(() => {}); }, tickMs); timer.unref();
+  server.on('close', () => { clearInterval(timer); push.close(); store.close(); });
+  return { server, store, tick };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   mkdirSync(path.join(root, 'data'), { recursive: true });
-  const { server } = createApp({ dbPath: process.env.KAZE_DB ?? path.join(root, 'data/kaze.sqlite') });
+  const { server } = createApp({ dbPath: process.env.KAZE_DB ?? path.join(root, 'data/kaze.sqlite'), applePush: applePushFromEnv() });
   server.listen(Number(process.env.PORT ?? 4173), process.env.HOST ?? '127.0.0.1', () => console.log(`KAZE simulation: http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? 4173}`));
 }

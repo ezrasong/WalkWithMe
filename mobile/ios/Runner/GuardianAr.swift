@@ -20,7 +20,7 @@ final class GuardianArPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate
   }
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard call.method == "prepareGuardianAr" else { result(FlutterMethodNotImplemented); return }
+    guard call.method == "prepareGuardianAr" else { GuardianNotifications.shared.handle(call, result: result); return }
     guard ARWorldTrackingConfiguration.isSupported else { result("ARKit world tracking unsupported. Use the map."); return }
     guard pending == nil else { result("Permission request pending."); return }
     pending = result

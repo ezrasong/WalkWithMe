@@ -124,7 +124,22 @@ class SessionController extends ChangeNotifier {
       storage = storage ?? const FlutterSecureStorage();
   bool get guardian => access?.role == 'guardian';
   bool get backgroundGuardianSupported =>
-      defaultTargetPlatform == TargetPlatform.android;
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+  bool get iosGuardian => defaultTargetPlatform == TargetPlatform.iOS;
+  Map<String, dynamic> get _guardianConfiguration => {
+    'id': access!.id,
+    'baseUrl': access!.baseUrl,
+    if (!iosGuardian) 'guardianToken': access!.token,
+    if (iosGuardian && snapshot != null) ...{
+      'phase': snapshot!['phase'],
+      'serverNow': serverNow,
+      'dueAt': snapshot!['dueAt'],
+      'graceSeconds': snapshot!['graceSeconds'],
+      'expiresAt': snapshot!['expiresAt'],
+      'acknowledged': snapshot!['acknowledgedAt'] != null,
+    },
+  };
   Future<void> _refreshGuardianStatus() async {
     if (!backgroundGuardianSupported || !guardian) return;
     final current = access;
@@ -135,6 +150,9 @@ class SessionController extends ChangeNotifier {
       );
       if (current != access || startedRevision != revision || disposed) return;
       device = status;
+      if (iosGuardian && status['enabled'] == true && snapshot != null) {
+        await native.invokeMethod('updateGuardian', _guardianConfiguration);
+      }
     } catch (_) {
       if (current != access || startedRevision != revision || disposed) return;
       device = {'status': 'Background monitoring unavailable. Keep KAZE open.'};
@@ -144,7 +162,7 @@ class SessionController extends ChangeNotifier {
   Future<void> setGuardianMonitoring(bool enabled) => run(() async {
     if (!guardian || !backgroundGuardianSupported) {
       throw const FormatException(
-        'Background guardian alerts are available on Android only. Keep KAZE open on iPhone.',
+        'Guardian notifications are available on Android and iPhone.',
       );
     }
     if (enabled) {
@@ -155,23 +173,58 @@ class SessionController extends ChangeNotifier {
         );
       }
       await native.invokeMethod('guardianPermissions');
-      final a = access!;
       await native.invokeMethod(
         'startGuardian',
-        jsonEncode({
-          'baseUrl': a.baseUrl,
-          'id': a.id,
-          'guardianToken': a.token,
-        }),
+        jsonEncode(_guardianConfiguration),
       );
+      if (iosGuardian) await _refreshGuardianStatus();
+      if (iosGuardian && device['pushAvailable'] == true) {
+        final registration = Map<String, dynamic>.from(
+          await native.invokeMapMethod('guardianPushRegistration') ?? {},
+        );
+        // Keep cleanup metadata even if the registration response is lost.
+        await native.invokeMethod('guardianPushPending');
+        await api(action: 'guardian-push', body: registration);
+        await native.invokeMethod(
+          'guardianPushRegistered',
+          registration['registrationId'],
+        );
+      }
     } else {
-      await native.invokeMethod('stopGuardian');
+      await _stopGuardianMonitoring();
     }
     await _refreshGuardianStatus();
   });
 
   Future<void> _stopGuardianMonitoring() async {
-    if (backgroundGuardianSupported) await native.invokeMethod('stopGuardian');
+    if (!backgroundGuardianSupported) return;
+    final current = access;
+    final startedRevision = revision;
+    final status = iosGuardian
+        ? await native.invokeMapMethod('guardianStatus')
+        : null;
+    if (current != access || startedRevision != revision || disposed) return;
+    await native.invokeMethod('stopGuardian');
+    if (current != access || startedRevision != revision || disposed) return;
+    if (iosGuardian) {
+      if ((status?['pushRegistered'] == true ||
+              status?['pushPending'] == true) &&
+          guardian &&
+          status?['sessionId'] == access!.id) {
+        try {
+          await api(
+            action: 'guardian-push',
+            method: 'DELETE',
+            body: {'registrationId': status!['registrationId']},
+          );
+        } on ApiFailure catch (e) {
+          if (![401, 404].contains(e.status)) rethrow;
+        }
+        // If offline, preserve the access and registration metadata for a retry.
+      }
+      if (current != access || startedRevision != revision || disposed) return;
+      await native.invokeMethod('clearGuardianPush');
+    }
   }
 
   int get serverNow => (snapshot?['serverNow'] as num?)?.toInt() == null

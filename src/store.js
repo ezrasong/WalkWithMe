@@ -9,7 +9,9 @@ export class Store {
         id TEXT NOT NULL, source TEXT NOT NULL, seq INTEGER NOT NULL, at REAL NOT NULL, body TEXT NOT NULL,
         PRIMARY KEY(session_id,id), UNIQUE(session_id,source,seq));
       CREATE TABLE IF NOT EXISTS activity(session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-        at REAL NOT NULL, action TEXT NOT NULL, role TEXT NOT NULL);`);
+        at REAL NOT NULL, action TEXT NOT NULL, role TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS guardian_push(session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        registration_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(session_id,registration_id));`);
   }
   get(id) { const row = this.db.prepare('SELECT body FROM sessions WHERE id=?').get(id); return row ? JSON.parse(row.body) : null; }
   save(s) { this.db.prepare('INSERT INTO sessions VALUES (?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body').run(s.id, JSON.stringify(s)); }
@@ -32,5 +34,15 @@ export class Store {
   recordActivity(id, action, at, role) { this.db.prepare('INSERT INTO activity VALUES(?,?,?,?)').run(id, at, action, role); }
   activity(id) { return this.db.prepare('SELECT at,action,role FROM activity WHERE session_id=? ORDER BY at,rowid').all(id); }
   clearEvents(id) { this.db.prepare('DELETE FROM events WHERE session_id=?').run(id); this.db.prepare('DELETE FROM activity WHERE session_id=?').run(id); }
+  guardianPushes() { return this.db.prepare('SELECT body FROM guardian_push').all().map(r => JSON.parse(r.body)); }
+  guardianPush(sessionId, registrationId) {
+    const row = this.db.prepare('SELECT body FROM guardian_push WHERE session_id=? AND registration_id=?').get(sessionId, registrationId);
+    return row ? JSON.parse(row.body) : null;
+  }
+  saveGuardianPush(p) { this.db.prepare('INSERT INTO guardian_push VALUES(?,?,?) ON CONFLICT(session_id,registration_id) DO UPDATE SET body=excluded.body').run(p.sessionId, p.registrationId, JSON.stringify(p)); }
+  removeGuardianPush(sessionId, registrationId) {
+    if (registrationId) this.db.prepare('DELETE FROM guardian_push WHERE session_id=? AND registration_id=?').run(sessionId, registrationId);
+    else this.db.prepare('DELETE FROM guardian_push WHERE session_id=?').run(sessionId);
+  }
   close() { this.db.close(); }
 }

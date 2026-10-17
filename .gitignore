@@ -6,6 +6,7 @@ android/local.properties
 **/build/
 *.log
 .env
+*.p8
 .DS_Store
 playwright-report/
 test-results/

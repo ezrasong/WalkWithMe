@@ -57,14 +57,14 @@ reachable HTTPS service address. Guardian invitations must match the service
 compiled into the app. For a physical iPhone build:
 
 ```sh
-git clone --branch kaze-flutter-verification https://github.com/ezrasong/htv11.git
+git clone https://github.com/ezrasong/htv11.git
 cd htv11/mobile
 flutter pub get
 flutter build ios --debug --no-codesign --dart-define=KAZE_BASE_URL=https://your-service.example
 open ios/Runner.xcworkspace
 ```
 
-In Xcode, select Runner, your signing team and the connected iPhone, then run. Enable iPhone Developer Mode if requested.
+In Xcode, select Runner, enable **Automatically manage signing**, choose your Apple Account's Personal Team and the connected iPhone, then run. Enable iPhone Developer Mode if requested. This is a signed development build. A free Apple Account supports local installation and local notification reminders, usually with a seven-day provisioning lifetime. It does not provide Apple remote push capability. TestFlight/App Store distribution and remote push require paid Apple Developer membership. Leave the default `Kaze.entitlements` and `KAZE_PUSH_ENABLED=NO` for free-account testing.
 
 Join as guardian using the link copied from the wearer's phone. Background wearer recording currently runs on Android. Signed builds and real-device permissions still need physical iPhone verification.
 
@@ -113,7 +113,7 @@ On an Android guardian, opt into **Background guardian alerts** on the session s
 
 The background monitor reads only session status. Its polling never counts as a human opening or acknowledging the request. Network errors produce a separate connection warning, not a safety alert. Notification settings, Do Not Disturb and manufacturer battery controls still apply. Physical background delivery needs a dedicated guardian-device check before relying on it.
 
-On iPhone, keep KAZE open to receive updates. Apple background push is not connected; signed builds and physical iPhone background delivery have not been verified. Calls, SMS, backup-contact escalation and emergency dispatch are not connected on either platform. Check-ins require server confirmation. An acknowledgment does not end the session.
+On iPhone, enable **Guardian notifications** for a local review reminder at the last known check-in deadline plus grace. It says to reopen KAZE to verify status; it cannot establish nonresponse while the app is closed and may be stale after a wearer check-in, revocation or session change. Confirmed foreground updates refresh or cancel the reminder. No background location, continuous polling or silent-push workaround is used. Optional remote Apple push is implemented but disabled until paid-team signing and server credentials are configured; see [Apple notification setup](IOS_NOTIFICATIONS.md). The new Swift notification code still needs an Xcode build and physical iPhone validation. Calls, SMS, backup-contact escalation and emergency dispatch are not connected on either platform. Check-ins require server confirmation. An acknowledgment does not end the session.
 
 See [network setup](PC_BACKEND.md) for remote access.
 

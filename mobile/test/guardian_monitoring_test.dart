@@ -185,14 +185,23 @@ void main() {
       expect(calls.map((c) => c.method), contains('stopGuardian'));
     },
   );
-  test(
-    'iPhone does not claim background support or request Android permissions',
-    () async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      await c.setGuardianMonitoring(true);
-      expect(calls, isEmpty);
-      expect(c.backgroundGuardianSupported, false);
-      expect(c.message, contains('Keep KAZE open on iPhone'));
-    },
-  );
+  test('iPhone enables local review reminders without passing guardian credentials', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    c.received = DateTime.now();
+    c.snapshot = {
+      'phase': 'armed',
+      'dueAt': 6000,
+      'graceSeconds': 3,
+      'serverNow': 1000,
+      'expiresAt': 20000,
+    };
+    await c.setGuardianMonitoring(true);
+    final config = jsonDecode(
+      calls.firstWhere((c) => c.method == 'startGuardian').arguments as String,
+    ) as Map;
+    expect(config.containsKey('guardianToken'), false);
+    expect(config['dueAt'], 6000);
+    expect(c.backgroundGuardianSupported, true);
+    expect(calls.any((c) => c.method == 'guardianPushRegistration'), false);
+  });
 }
