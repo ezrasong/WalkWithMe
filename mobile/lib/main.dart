@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'session.dart';
 import 'direction_preview.dart';
+import 'device_setup.dart';
 import 'trail_map.dart';
 export 'trail_map.dart';
 
@@ -183,8 +184,37 @@ class _SessionScreenState extends State<SessionScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     c.addListener(update);
-    c.restore();
+    c.restore().then((_) => offerDeviceSetup());
     clock = Timer.periodic(const Duration(seconds: 1), (_) => update());
+  }
+
+  Future<void> offerDeviceSetup() async {
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) {
+      return;
+    }
+    try {
+      if (await c.storage.read(key: 'deviceSetupSeenV1') == 'true') return;
+      if (mounted) await openDeviceSetup();
+    } catch (_) {
+      /* Setup remains available from onboarding and Settings. */
+    }
+  }
+
+  Future<void> openDeviceSetup() async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const DeviceSetupScreen(),
+        fullscreenDialog: true,
+      ),
+    );
+    // Keep this key stable across app upgrades. Dismissing setup also counts
+    // as seeing it; saved choices stay available through the manual entry.
+    try {
+      await c.storage.write(key: 'deviceSetupSeenV1', value: 'true');
+    } catch (_) {
+      /* Offer setup again next launch if the preference was not saved. */
+    }
   }
 
   void update() {
@@ -325,6 +355,11 @@ class _SessionScreenState extends State<SessionScreen>
       const Text(
         'Stay connected to someone you trust. Start a session or join someone as their guardian.',
       ),
+      TextButton.icon(
+        onPressed: openDeviceSetup,
+        icon: const Icon(Icons.settings_suggest_outlined),
+        label: const Text('Permissions & background setup'),
+      ),
       const SizedBox(height: 20),
       if (Platform.isAndroid)
         SegmentedButton<int>(
@@ -463,6 +498,11 @@ class _SessionScreenState extends State<SessionScreen>
       FilledButton(
         onPressed: c.busy ? null : c.refresh,
         child: const Text('Reconnect'),
+      ),
+      TextButton.icon(
+        onPressed: openDeviceSetup,
+        icon: const Icon(Icons.settings_suggest_outlined),
+        label: const Text('Permissions & background setup'),
       ),
       if (!c.guardian)
         OutlinedButton(
@@ -842,6 +882,14 @@ class _SessionScreenState extends State<SessionScreen>
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
       children: [
+        section('Device setup', [
+          action(
+            Icons.settings_suggest_outlined,
+            'Permissions & background setup',
+            openDeviceSetup,
+            subtitle: 'Location, reminders and background settings.',
+          ),
+        ]),
         section('Appearance', [
           const Text('The map follows your appearance.'),
           const SizedBox(height: 12),

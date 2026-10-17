@@ -4,6 +4,12 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.PowerManager;
+import android.app.ActivityManager;
+import android.app.NotificationManager;
+import android.location.LocationManager;
+import android.net.Uri;
+import android.provider.Settings;
 import app.kaze.shared.*;
 import io.flutter.embedding.android.FlutterActivity;
 import io.flutter.embedding.engine.FlutterEngine;
@@ -22,6 +28,23 @@ public final class MainActivity extends FlutterActivity {
         new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), "app.kaze/session").setMethodCallHandler((call, result) -> {
             switch (call.method) {
                 case "permissions": requestRecordingPermissions(result); break;
+                case "setupStatus": {
+                    var state = new HashMap<String,Object>();
+                    state.put("locationAllowed", LocationRecorder.permitted(this));
+                    state.put("preciseLocation", checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED);
+                    state.put("locationServices", getSystemService(LocationManager.class).isLocationEnabled());
+                    state.put("notificationsAllowed", getSystemService(NotificationManager.class).areNotificationsEnabled());
+                    state.put("batteryExempt", getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(getPackageName()));
+                    state.put("backgroundRestricted", getSystemService(ActivityManager.class).isBackgroundRestricted());
+                    state.put("manufacturer", Build.MANUFACTURER);
+                    result.success(state); break;
+                }
+                case "batterySettings": {
+                    if (getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())) { result.success(null); break; }
+                    openSetupSettings(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())), result); break;
+                }
+                case "locationSettings": openSetupSettings(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS), result); break;
+                case "appSettings": openSetupSettings(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())), result); break;
                 case "status": {
                     var p = Config.prefs(this); var state = new HashMap<String,Object>();
                     state.put("active", p.getBoolean("active", false)); state.put("status", p.getString("status", "Recorder not started"));
@@ -49,6 +72,10 @@ public final class MainActivity extends FlutterActivity {
                 default: result.notImplemented();
             }
         });
+    }
+    private void openSetupSettings(Intent intent, MethodChannel.Result result) {
+        try { startActivity(intent); result.success(null); }
+        catch (RuntimeException e) { result.error("settings", "Open this phone's Settings and select KAZE under Apps.", null); }
     }
     private void requestRecordingPermissions(MethodChannel.Result result) {
         if (permissionResult != null) { result.error("pending", "Permission request already open", null); return; }

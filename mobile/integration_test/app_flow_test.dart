@@ -44,6 +44,26 @@ void main() {
       expect(finder, findsWidgets);
     }
 
+    await waitFor(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Text &&
+            ['Set up KAZE', 'A timed safety session'].contains(widget.data),
+      ),
+    );
+    if (find.text('Set up KAZE').evaluate().isNotEmpty) {
+      // OS permissions are prepared by the physical tester. This harness
+      // acknowledges the explanation without silently granting OS access.
+      final next = find.text('Continue');
+      await tester.scrollUntilVisible(
+        next,
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(next);
+      await tester.pumpAndSettle();
+      await tester.tap(next);
+    }
     await waitFor(find.text('A timed safety session'));
     final consent = find.byType(CheckboxListTile).first;
     await tester.scrollUntilVisible(

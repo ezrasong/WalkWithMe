@@ -44,6 +44,16 @@ In Xcode choose Runner, a unique bundle identifier if necessary, your Apple deve
 
 On iPhone choose **Join as guardian** and paste the link copied from the wearer's app Settings. The current iOS role is guardian; wearer background recording is implemented on Android for the designated Vivo, not claimed on iOS.
 
+## First-launch device setup
+
+The first launch offers **Set up KAZE** before a session starts. On Android it shows current location permission, the system Location services switch, notification permission, Android battery exemption, and manufacturer background guidance. **Allow permissions** opens the normal recording permission dialogs. **Open Location settings** opens the system location page when services are off. **Allow background battery use** opens Android's per-app exemption request; the user can allow or deny it. No session or camera recording starts during setup.
+
+On the Vivo, verify App info -> Battery usage -> Background power control -> **Allow background power usage**. The system exemption prompt selected that option on the tested Vivo; other manufacturers may require a separate change. Android's exemption status alone does not prove the vendor policy. With smart control and location denied, this Vivo froze KAZE and disabled its wake lock even though its foreground service remained present.
+
+The first-launch acknowledgment uses a stable saved key. Continuing or closing setup remembers that it was seen. Normal signed app updates preserve this marker, appearance, saved access, permissions and OS battery choices; do not uninstall or clear app data to update. **Permissions & background setup** remains available from onboarding, Settings, and the offline screen. Existing permission or battery choices are displayed without resetting them. A user or OS revocation can still require re-enabling access.
+
+On iPhone the setup offers optional while-in-use location for the guardian direction preview and app/location settings links. It does not display Android battery controls or claim iPhone background wearer recording.
+
 ## Roles and disclosure
 
 1. On the Vivo enter the PC URL and first name, choose timing, explicitly consent and start a safety session. Phone sensor permissions can be denied; no location will be invented.
@@ -102,6 +112,6 @@ The helper starts the dedicated local backend using `data/device-test.sqlite`. W
 
 ## Appearance and layout
 
-Settings → Appearance offers System, Light and Dark; the choice is remembered. The native vector map uses matching light/dark styles with sharp street labels. The bundled Dark adaptation increases label, road and building contrast; upstream notices are available under Licenses & map credits. Check-in stays prominent above the map; detailed readings and guardian response actions are available from the location card. Map controls recenter, show the complete recorded trail, and zoom. Blue solid phone paths and purple dashed watch paths retain separate sources and real gaps. Panning pauses automatic following until recenter.
+Settings -> Appearance offers System, Light and Dark; the choice is remembered. The native vector map uses matching light/dark styles with sharp street labels. The bundled Dark adaptation increases label, road and building contrast; upstream notices are available under Licenses & map credits. Check-in stays prominent above the map; detailed readings and guardian response actions are available from the location card. Map controls recenter, show the complete recorded trail, and zoom. Blue solid phone paths and purple dashed watch paths retain separate sources and real gaps. Panning pauses automatic following until recenter.
 
 The layout follows Apple's [Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/), especially layout, typography, accessibility and maps: safe areas, scalable text, clear hierarchy, generous touch targets, labeled controls, restrained surfaces and grouped destructive actions. iOS uses Cupertino navigation/tab bars and adaptive dialogs; Android keeps platform navigation. Verify actual iOS rendering and signing on the Mac before treating it as iPhone-tested.
