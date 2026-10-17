@@ -1,0 +1,163 @@
+import 'dart:convert';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:kaze/main.dart';
+import 'package:kaze/session.dart';
+
+const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const token = 'guardian_012345678901234567890123456789012345';
+SessionAccess guardian() => SessionAccess(
+  baseUrl: 'https://test.example',
+  id: id,
+  token: token,
+  role: 'guardian',
+);
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  test(
+    'guardian links preserve scoped credentials and reject unsafe origins',
+    () {
+      final a = SessionAccess.guardian(
+        'https://test.example/guardian#session=$id&token=$token',
+      );
+      expect(a.baseUrl, 'https://test.example');
+      expect(a.token, token);
+      expect(a.role, 'guardian');
+      for (final url in [
+        'http://public.example',
+        'https://user:pass@test.example',
+        'https://test.example/path',
+        'http://192.168.evil.example',
+        'https://test.example#secret',
+      ]) {
+        expect(() => validateBaseUrl(url), throwsFormatException);
+      }
+      expect(
+        () => validateBaseUrl('http://127.0.0.1:4174', allowLocalHttp: false),
+        throwsFormatException,
+      );
+      expect(
+        validateBaseUrl('http://192.168.2.10:4174', allowLocalHttp: true),
+        'http://192.168.2.10:4174',
+      );
+    },
+  );
+  test(
+    'authorized guardian data is cleared on revocation and offline failure',
+    () async {
+      var status = 200;
+      final c = SessionController(
+        client: MockClient((request) async {
+          expect(request.headers['Authorization'], 'Bearer $token');
+          expect(request.followRedirects, false);
+          return http.Response(
+            jsonEncode(
+              status == 200
+                  ? {
+                      'shared': true,
+                      'phase': 'alert',
+                      'serverNow': 1000,
+                      'expiresAt': 10000,
+                      'geography': {
+                        'latest': {'latitude': 43},
+                      },
+                    }
+                  : {'error': 'revoked'},
+            ),
+            status,
+          );
+        }),
+      );
+      addTearDown(c.dispose);
+      c.access = guardian();
+      await c.refresh();
+      expect(c.snapshot?['shared'], true);
+      status = 503;
+      await c.refresh();
+      expect(c.snapshot, isNull);
+      expect(c.access, isNotNull);
+      status = 401;
+      await c.refresh();
+      expect(c.access, isNull);
+      expect(c.snapshot, isNull);
+      expect(c.message, contains('revoked'));
+    },
+  );
+  test('a rejected check-in cannot show a server confirmation', () async {
+    final c = SessionController(
+      client: MockClient(
+        (_) async => http.Response('{"error":"alert remains active"}', 409),
+      ),
+    );
+    addTearDown(c.dispose);
+    c.access = guardian();
+    await c.mutate('check-in');
+    expect(c.message, contains('alert remains active'));
+    expect(c.message, isNot(contains('confirmed by server')));
+  });
+  test(
+    'an earlier in-flight read cannot undo an accepted end-session response',
+    () async {
+      final old = Completer<http.Response>();
+      final c = SessionController(
+        client: MockClient(
+          (r) async => r.method == 'GET'
+              ? old.future
+              : http.Response(
+                  '{"phase":"resolved","shared":true,"serverNow":1000}',
+                  200,
+                ),
+        ),
+      );
+      addTearDown(c.dispose);
+      c.access = SessionAccess(
+        baseUrl: 'https://test.example',
+        id: id,
+        token: token,
+        role: 'owner',
+      );
+      final read = c.refresh();
+      await c.mutate('resolve');
+      old.complete(
+        http.Response('{"phase":"alert","shared":true,"serverNow":1000}', 200),
+      );
+      await read;
+      expect(c.snapshot?['phase'], 'resolved');
+    },
+  );
+  test('backgrounding the guardian hides cached evidence', () {
+    final c = SessionController();
+    addTearDown(c.dispose);
+    c.access = guardian();
+    c.snapshot = {'shared': true};
+    c.setVisible(false);
+    expect(c.snapshot, isNull);
+  });
+  testWidgets(
+    'native Flutter map handles missing location without invented markers',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TrailMap(
+              snapshot: {
+                'id': id,
+                'shared': true,
+                'geography': {'latest': null, 'paths': []},
+              },
+              tiles: false,
+            ),
+          ),
+        ),
+      );
+      expect(find.textContaining('No location received'), findsOneWidget);
+      expect(find.byIcon(Icons.person_pin_circle), findsNothing);
+    },
+  );
+}
