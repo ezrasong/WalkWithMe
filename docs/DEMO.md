@@ -1,6 +1,6 @@
 # Four-minute demonstration
 
-1. Start a voluntary timed session on the Vivo Flutter app. Explain the chosen interval, response window, eight-hour expiry and default sharing after nonresponse. Pair/start the Watch4 only if physically available.
+1. Start a voluntary timed session on the Vivo Flutter app. Explain the chosen interval, response window, eight-hour expiry and default sharing after nonresponse. If the Watch4 is available and already paired in Galaxy Wearable, open KAZE on it; it joins the consented phone session automatically. There is no separate watch Start or enable action.
 2. Copy the private guardian link from Settings into the Flutter app on the second iPhone/Android phone. Both need the same reachable PC HTTPS origin. An ADB localhost URL only works on the tethered Vivo.
 3. Record a measured outdoor route with the Vivo in a pocket. Show its received geographic trail, timestamps and reported uncertainty. Check in once and show server confirmation/Activity. If no measured devices are available, use the browser's visibly labelled synthetic demo and call it simulated.
 4. Keep the guardian app open. Miss a response window. Show the assistance request and the actual last uploaded evidence. Disconnect the wearer to demonstrate that already registered server deadlines continue; queued readings are unavailable remotely until uploaded.
@@ -8,3 +8,13 @@
 6. End or revoke from the wearer. Show the guardian view clearing. No emergency dispatch, push, SMS, calls, custom motion AI, verified room/floor identification or validated rescue outcome is claimed.
 
 Use only consenting test contacts. Camera failures and sensor activity cannot change deadlines. Do not claim iPhone installation, Watch4 haptics or screen-off tracking before the corresponding physical checks pass. See the implementation ledger and Flutter/Mac guide for the exact remaining gates.
+
+## Measured walking check before claiming route accuracy
+
+Use a consenting wearer and a safe outdoor route with a straight segment, a clear turn and a return segment. Before recording, establish an independent reference: surveyed checkpoints or a separately recorded reference track with timestamps and documented uncertainty. Record route length, checkpoint/turn passage times, reference method and uncertainty. A street-map outline or the Vivo's own fixes cannot establish independent ground truth. If only a tape-measured distance is available, report distance error only; it does not establish geographic position error.
+
+Start one fresh device session using the same reachable backend origin as the guardian. Keep the Vivo in its normal pocket position and wear the Watch4 normally. At the start, each turn and the finish, note a time aligned with the reference clock. Walk without synthetic location injection. End the session after confirming the backend has received the final observations, and confirm both recorders stop. Keep raw geographic artifacts private.
+
+Compare phone and watch separately against the reference at matched times. Report sample counts, time coverage, missing intervals, median/95th-percentile/maximum horizontal error, reference uncertainty and each device's reported accuracy. Report path-length error only where the reference supports it; account for gaps rather than drawing an assumed route through them. Watch fused/network fixes can come from the paired phone, so agreement between phone and watch is not independent confirmation. Mark results inconclusive when the reference or timing is too weak. This physical gate remains pending; stationary provider accuracy values do not pass it.
+
+For the optional guardian camera check, use a separate authorized guardian phone after nonresponse. Compare ahead/left/right guidance against visible reference landmarks while facing several known directions, then exercise denied camera/location, poor compass precision and access revocation. Record the actual result and the map fallback. This validates only the approximate compass cue; it cannot establish spatially anchored AR or floor/stair guidance.

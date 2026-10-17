@@ -47,12 +47,14 @@ Required physical checks still include: Vivo pocket/screen-off duration and batt
 
 A compiled APK, mocked browser route or widget test is not evidence of physical route accuracy, screen-off reliability or assistance arriving.
 
-### Completed physical observation — October 17, 2026
+### Initial physical observation — October 17, 2026
 
 The connected Vivo identified itself as V2547A running Android 16 / API 36. The Flutter device integration test passed: create an explicitly consented device session, use the native recorder, receive actual uploads, accept a check-in, show Activity, and end the session. The PC database for that test contains two phone heartbeats and nine non-mock geographic fixes reported by network/GPS providers. No synthetic location events were sent. This verifies the phone/service/PC path; it does not measure route error or prove that a provider's reported accuracy matches real error.
 
-The local evidence is `artifacts/vivo-flutter-integration.txt` and `artifacts/vivo-evidence.json` (no tokens or coordinates in the summary). Six Flutter unit/widget tests, 30 Node tests, three browser flows, 10 shared Android tests and Watch/shared build/lint checks passed in completed runs. Phone Flutter build/lint is reported from its own completed output. iOS signing/device testing, Watch4 pairing/haptics, measured walking, long screen-off capture, offline device recovery and remote HTTPS/mobile-data access remain unverified.
+The initial evidence is `artifacts/vivo-flutter-integration.txt` and `artifacts/vivo-evidence.json` (no tokens or coordinates in the summary). Its historical baseline was six Flutter tests, 30 Node tests, three browser flows and 10 shared Android tests. Later verification supersedes those counts and several initial hardware gaps; use [the verification ledger](VERIFICATION.md) for current results.
 
 The production Flutter debug APK was rebuilt and restored on the Vivo after the integration run. Phone Android lint completed successfully, with zero errors (existing dependency/resource warnings remain). Local Flutter-generated Windows SDK paths needed standard Java-properties drive-colon escaping before a fresh lint analysis; the local.properties file is not included in the source bundle. No iOS build result is claimed.
 
 Automatic Watch4 setup is now implemented: start on the Vivo, open KAZE on the paired watch, and tap Check in without a separate watch activation step. The real watch discovered the matching session and uploaded pressure/heartbeat through the paired phone. Detailed current results and remaining gates are in [the verification ledger](VERIFICATION.md).
+
+Subsequent bounded physical checks verified vibration-only watch/phone reminders, a 610-second screen-off interval, both-device offline queue recovery without duplicate stored identities, and end propagation through the paired-phone relay. First-launch setup and actual Vivo upgrades retained granted permissions, background exemption and setup dismissal. Denied-location background shutdown failed under Vivo smart control and passed a bounded retest after background access was enabled. These observations do not establish measured walking accuracy, unrestricted battery endurance, an iPhone build, two-phone HTTPS/mobile-data operation or camera alignment.
