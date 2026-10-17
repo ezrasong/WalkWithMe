@@ -26,6 +26,7 @@ public final class MainActivity extends FlutterActivity {
     private final java.util.concurrent.ExecutorService worker = Executors.newSingleThreadExecutor();
     @Override public void configureFlutterEngine(FlutterEngine engine) {
         super.configureFlutterEngine(engine);
+        try { MotionCapture.status(this); } catch (Exception ignored) { /* Retry local evaluation cleanup when opened. */ }
         engine.getPlatformViewsController().getRegistry().registerViewFactory("app.kaze/guardian-ar",
             new io.flutter.plugin.platform.PlatformViewFactory(io.flutter.plugin.common.StandardMessageCodec.INSTANCE) {
                 @Override public io.flutter.plugin.platform.PlatformView create(android.content.Context context, int id, Object args) {
@@ -34,6 +35,19 @@ public final class MainActivity extends FlutterActivity {
             });
         new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), "app.kaze/session").setMethodCallHandler((call, result) -> {
             switch (call.method) {
+                case "motionStatus": result.success(MotionCapture.status(this)); break;
+                case "startMotionCapture": case "stopMotionCapture": {
+                    if (!Config.prefs(this).getBoolean("active", false)) { result.error("inactive", "An active wearer phone session is required", null); break; }
+                    startService(new Intent(this, TrailService.class).setAction(call.method.equals("startMotionCapture") ? "app.kaze.START_MOTION" : "app.kaze.STOP_MOTION")
+                        .putExtra("streaming", Boolean.TRUE.equals(call.argument("streaming")))
+                        .putExtra("cellular", Boolean.TRUE.equals(call.argument("cellular"))));
+                    result.success(null); break;
+                }
+                case "deleteMotionCapture": {
+                    try { MotionCapture.delete(this); result.success(null); }
+                    catch (Exception e) { result.error("motion", e.getMessage(), null); }
+                    break;
+                }
                 case "prepareGuardianAr": {
                     if (Config.prefs(this).getBoolean("active", false)) { result.success("End wearer recording before using a guardian camera."); break; }
                     if (arPermissionResult != null || permissionResult != null) { result.success("Permission request pending."); break; }

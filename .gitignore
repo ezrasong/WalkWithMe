@@ -7,6 +7,30 @@ android/local.properties
 *.log
 .env
 *.p8
+.env.*
+!.env.example
+!.env.*.example
+/.codex/
+/.cache/
+/.venv/
+**/local.properties
+**/key.properties
+*.keystore
+*.jks
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.apk
+*.aab
+*.ipa
+*.pt
+*.pth
+# Private captures and reports belong outside source.
+/motion-evaluation/
+/motion-results/
 .DS_Store
 playwright-report/
 test-results/
@@ -14,6 +38,9 @@ __pycache__/
 *.pyc
 
 # Local planning, device evidence and development helpers.
+/scripts/
+/playwright.config.*
+/test/browser/
 /KAZE_BUILD_GOAL.md
 /KAZE_VERIFY_GOAL.md
 /docs/VERIFICATION.md
@@ -21,6 +48,3 @@ __pycache__/
 /docs/DEMO.md
 /mobile/README.md
 /mobile/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md
-/scripts/device-test-backend.mjs
-/scripts/setup-android.ps1
-/scripts/verify-device-flow.py

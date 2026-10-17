@@ -10,14 +10,17 @@ import { reconstruct } from './trail.js';
 import { geographicTrail } from './locations.js';
 import { guardianArTrail } from './ar.js';
 import { applePushFromEnv, GuardianPushDelivery } from './apple-push.js';
+import { MotionEvaluator } from './motion.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, applePush = null } = {}) {
+export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, applePush = null, motion = new MotionEvaluator() } = {}) {
   const store = new Store(dbPath), limits = new Map();
+  const motionLimits = new Map();
   function current(id) {
     let s = store.get(id);
     if (!s) throw new Problem(404, 'Session not found');
     const updated = advance(s, now());
+    if (['expired', 'resolved'].includes(updated.phase)) motionLimits.delete(id);
     if (updated.phase === 'expired' && s.phase !== 'expired') { store.clearEvents(s.id); updated.origin = 'Expired'; updated.name = 'Expired session'; }
     if (['expired', 'resolved'].includes(updated.phase)) store.removeGuardianPush(id);
     if (JSON.stringify(updated) !== JSON.stringify(s)) store.transaction(() => {
@@ -51,10 +54,14 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
       withoutCamera: shared ? reconstruct(events, { ...s, useCamera: false }) : null,
       lastGps: geography?.latest ?? null };
   }
-  async function body(req) {
+  async function bytes(req, maximum = 350000) {
     const chunks = []; let size = 0;
-    for await (const chunk of req) { size += chunk.length; if (size > 350000) throw new Problem(413, 'Request too large'); chunks.push(chunk); }
-    try { const value = JSON.parse(Buffer.concat(chunks)); if (!value || typeof value !== 'object' || Array.isArray(value)) throw 0; return value; }
+    for await (const chunk of req) { size += chunk.length; if (size > maximum) throw new Problem(413, 'Request too large'); chunks.push(chunk); }
+    return Buffer.concat(chunks);
+  }
+  async function body(req) {
+    const raw = await bytes(req);
+    try { const value = JSON.parse(raw); if (!value || typeof value !== 'object' || Array.isArray(value)) throw 0; return value; }
     catch { throw new Problem(400, 'Expected a JSON object'); }
   }
   const server = http.createServer(async (req, res) => {
@@ -85,7 +92,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           initialHeading: number(b.initialHeading ?? 0, 0, 360, 'initial heading'), ownerHash: hash(owner), guardianHash: hash(guardian), watchHash: hash(watch) };
         store.save(s); store.recordActivity(s.id, 'started', now(), 'owner'); return json(201, { ...snapshot(s, 'owner'), ownerToken: owner, guardianToken: guardian, watchToken: watch });
       }
-      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push))?$/.exec(url.pathname);
+      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push|motion))?$/.exec(url.pathname);
       if (match) {
         const id = match[1], action = match[2]; let s = current(id);
         if (action === 'guardian-push') {
@@ -113,6 +120,26 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           return json(200, { id: s.id, role: 'guardian', phase: s.phase,
             serverNow: now(), expiresAt: s.expiresAt, acknowledgedAt: s.acknowledgedAt ?? null });
         }
+        if (action === 'motion') {
+          auth(req, s, ['owner']);
+          if (req.method !== 'POST') throw new Problem(405, 'Method not allowed');
+          if (s.phase === 'resolved' || s.sensorMode !== 'device') throw new Problem(409, 'An active device session is required');
+          if (req.headers['x-kaze-motion-consent'] !== '1' || req.headers['content-type'] !== 'application/gzip')
+            throw new Problem(400, 'Expected an explicitly consented compressed motion batch');
+          const compressed = await bytes(req, 180000);
+          s = current(id); auth(req, s, ['owner']);
+          if (s.phase === 'resolved') throw new Problem(409, 'Session has ended');
+          if (compressed[0] !== 0x1f || compressed[1] !== 0x8b || compressed[2] !== 8)
+            throw new Problem(400, 'Expected a gzip motion batch');
+          if (motionLimits.has(id) && now() - motionLimits.get(id) < 8000) throw new Problem(429, 'Send motion batches at most once per eight seconds');
+          motionLimits.set(id, now());
+          const result = await motion.evaluate(compressed.toString('base64'));
+          // Evaluation yields. Ending/deleting/expiring the session invalidates the result too.
+          s = current(id); auth(req, s, ['owner']);
+          if (s.phase === 'resolved') throw new Problem(409, 'Session has ended');
+          number(result?.captureStartedUtcMs, Math.max(s.createdAt - 5000, now() - 60000), now() + 5000, 'motion batch time');
+          return json(200, { accepted: true, serverNow: now(), result });
+        }
         if (action === 'ar') {
           auth(req, s, ['owner', 'guardian']);
           if (req.method !== 'GET') throw new Problem(405, 'Method not allowed');
@@ -124,7 +151,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           if (role === 'guardian') { s.guardianSeenAt = now(); if (s.phase === 'alert') s.alertSeenAt ??= now(); store.save(s); }
           return json(200, snapshot(s, role));
         }
-        if (req.method === 'DELETE' && !action) { auth(req, s, ['owner']); store.remove(id); return json(200, { deleted: true }); }
+        if (req.method === 'DELETE' && !action) { auth(req, s, ['owner']); motionLimits.delete(id); store.remove(id); return json(200, { deleted: true }); }
         if (req.method === 'POST' && action) {
           const role = auth(req, s, action === 'events' || action === 'check-in' ? ['owner', 'watch'] :
             action === 'acknowledge' || action === 'arrived' ? ['guardian'] : ['owner']);
@@ -174,7 +201,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
   const push = new GuardianPushDelivery(store, applePush, current, now);
   const tick = () => { for (const s of store.all()) current(s.id); return push.flush(); };
   const timer = setInterval(() => { void tick().catch(() => {}); }, tickMs); timer.unref();
-  server.on('close', () => { clearInterval(timer); push.close(); store.close(); });
+  server.on('close', () => { clearInterval(timer); push.close(); motion.close(); store.close(); });
   return { server, store, tick };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

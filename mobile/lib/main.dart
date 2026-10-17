@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'session.dart';
 import 'direction_preview.dart';
 import 'guardian_ar.dart';
+import 'motion_capture.dart';
 import 'device_setup.dart';
 import 'trail_map.dart';
 export 'trail_map.dart';
@@ -441,7 +442,7 @@ class _SessionScreenState extends State<SessionScreen>
             value: consent,
             onChanged: (v) => setState(() => consent = v!),
             title: const Text(
-              'I agree to record this session on my phone and paired watch, and share its trail after nonresponse with my chosen guardian. Data expires after 8 hours.',
+              'I agree to record this session on my phone and paired watch, send compressed phone motion over Wi-Fi or cellular for trail evaluation, and share its trail after nonresponse with my chosen guardian. Motion streaming can be stopped in Settings. Data expires after 8 hours.',
             ),
           ),
           CheckboxListTile.adaptive(
@@ -935,6 +936,17 @@ class _SessionScreenState extends State<SessionScreen>
             openDeviceSetup,
             subtitle: 'Location, reminders and background settings.',
           ),
+          if (Platform.isAndroid && !c.guardian)
+            action(
+              Icons.sensors,
+              'Motion trail evaluation',
+              () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MotionCapturePage(session: c),
+                ),
+              ),
+              subtitle: 'Automatic motion streaming and optional private capture.',
+            ),
         ]),
         if (c.guardian && phase != 'resolved')
           section('Guardian alerts', [guardianMonitoring()]),

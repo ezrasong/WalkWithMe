@@ -82,6 +82,24 @@ public class MonitoringServiceTest {
         assertEquals(List.of("GET", "POST", "GET"), requests); assertFalse(Config.prefs(context).getBoolean("active", true)); assertEquals(0, box.count(config.id));
         controller.destroy(); box.close();
     }
+    @Test public void confirmedWearerSessionStartsMotionAutomaticallyWithoutAnExtraScreenAction() throws Exception {
+        var manager = context.getSystemService(android.hardware.SensorManager.class);
+        for (int type : new int[]{1,4,15}) Shadows.shadowOf(manager).addSensor(org.robolectric.shadows.ShadowSensor.newInstance(type));
+        config.save(context);
+        Config.prefs(context).edit().putLong("expiresAt",System.currentTimeMillis()+3600000).commit();
+        var controller = Robolectric.buildService(TestService.class).create(); TestService service = controller.get();
+        Outbox box = new Outbox(context); service.config = config;
+        ReflectionHelpers.setField(service,"outbox",box);
+        ReflectionHelpers.setField(service,"motion",new MotionCapture(context));
+        try {
+            ReflectionHelpers.callInstanceMethod(service,"sync");
+            assertEquals(true,MotionCapture.status(context).get("recording"));
+            assertEquals(true,MotionCapture.status(context).get("automatic"));
+            assertEquals(true,MotionCapture.status(context).get("cellular"));
+            assertEquals("GET",requests.get(0));
+            assertEquals(9999999999999L,Config.prefs(context).getLong("dueAt",0));
+        } finally { controller.destroy(); box.close(); MotionCapture.delete(context); }
+    }
     private void responseDue(MonitoringService service) {
         service.config = config;
         Config.prefs(context).edit().putLong("dueAt", System.currentTimeMillis() - 1000).commit();
