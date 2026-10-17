@@ -37,6 +37,7 @@ public final class MainActivity extends Activity {
         countdown.setText(active ? alert ? "Use phone to end" : secs > 0 ? String.format(java.util.Locale.getDefault(), "%d:%02d", secs / 60, secs % 60) : "Response due" : "KAZE");
         countdown.setTextSize(alert ? 18 : 30);
         lastCheckIn.setText(checkingIn ? "Waiting for server confirmation" : message.startsWith("Not confirmed") ? "Check-in not confirmed. Retry."
+            : message.startsWith("Recording could not") ? message
             : message.startsWith("Offline") ? "Offline · readings saved"
             : active && accepted > 0 ? "Checked in " + android.text.format.DateFormat.format("HH:mm", accepted)
             : active ? "Through your paired phone" : resolved ? "Start a new session on phone" : "Start a session on your phone");
@@ -100,7 +101,16 @@ public final class MainActivity extends Activity {
     }
     private void failedStart(String message) { connecting = false; getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); WatchPairing.finishStart(); Config.prefs(this).edit().putString("status", message).apply(); }
     @Override public void onRequestPermissionsResult(int r,String[] p,int[] results) { super.onRequestPermissionsResult(r,p,results); if (r==7) { permissionsPending = false; start(); } }
-    @Override public void onResume() { super.onResume(); if (!Config.prefs(this).getBoolean("active", false)) discover(); handler.post(refresh); }
+    @Override public void onResume() {
+        super.onResume();
+        if (Config.prefs(this).getBoolean("active", false)) {
+            // A force-stop removes the service but retains the consented session.
+            // The existing service entry point is idempotent and checks session control.
+            try { startForegroundService(new Intent(this, WatchService.class).setAction(MonitoringService.REFRESH)); }
+            catch (RuntimeException e) { Config.prefs(this).edit().putString("status", "Recording could not resume. Reopen KAZE and retry.").apply(); }
+        } else discover();
+        handler.post(refresh);
+    }
     @Override public void onPause() { handler.removeCallbacks(refresh); super.onPause(); }
     @Override public void onDestroy() { worker.shutdownNow(); if (!Config.prefs(this).getBoolean("active", false)) WatchPairing.finishStart(); super.onDestroy(); }
 }
