@@ -46,7 +46,18 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
     private volatile Location fix;
     private volatile boolean stopped, started;
     private boolean tracked;
-    private long lastFix, lease, opened;
+    private long lastFix, opened;
+    private volatile long lease;
+    private final Runnable watchdog = new Runnable() {
+        @Override public void run() {
+            if (!started || stopped) return;
+            long now = SystemClock.elapsedRealtime();
+            if ((lease == 0 && now - opened > 15000) || (lease > 0 && now - lease > 2500)) {
+                fail(); return;
+            }
+            main.postDelayed(this, 500);
+        }
+    };
     private volatile List<Map<String, Object>> points = Collections.emptyList();
     private int width = 1, height = 1, texture, backgroundProgram, geometryProgram;
     private final float[] projection = new float[16], camera = new float[16], mvp = new float[16];
@@ -99,12 +110,14 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
             session.configure(config);
             locations.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this, Looper.getMainLooper());
             session.resume(); opened = SystemClock.elapsedRealtime(); started = true; view.onResume();
+            main.postDelayed(watchdog, 500);
         } catch (Exception e) { fail(); }
     }
 
     private void stop() {
         if (stopped) return;
         stopped = true; started = false; points = Collections.emptyList(); fix = null;
+        main.removeCallbacks(watchdog);
         locations.removeUpdates(this);
         view.setVisibility(View.INVISIBLE);
         // Join the GL thread before pausing/closing the native session.

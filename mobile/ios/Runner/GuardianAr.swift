@@ -69,9 +69,11 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
   private var lease: TimeInterval = 0
   private var opened: TimeInterval = 0
   private var started = false
+  private var stopped = false
   private var tracked = false
   private let dots = AnchorEntity(world: SIMD3<Float>.zero)
   private var backgroundObserver: NSObjectProtocol?
+  private var watchdog: Timer?
 
   init(frame: CGRect, id: Int64, messenger: FlutterBinaryMessenger) {
     scene = ARView(frame: frame, cameraMode: .ar, automaticallyConfigureSession: false)
@@ -103,7 +105,7 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
 
   func view() -> UIView { scene }
   private func start() {
-    guard !started, ARWorldTrackingConfiguration.isSupported,
+    guard !started, !stopped, ARWorldTrackingConfiguration.isSupported,
       AVCaptureDevice.authorizationStatus(for: .video) == .authorized,
       location.authorizationStatus == .authorizedWhenInUse || location.authorizationStatus == .authorizedAlways,
       location.accuracyAuthorization == .fullAccuracy else { fail(); return }
@@ -114,10 +116,18 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
     // Local visual-inertial tracking only; no geo/cloud anchors or image upload.
     scene.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
     location.startUpdatingLocation()
+    let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+      guard let self = self, self.started else { return }
+      let now = ProcessInfo.processInfo.systemUptime
+      if (self.lease == 0 && now - self.opened > 15) || (self.lease > 0 && now - self.lease > 2.5) { self.fail() }
+    }
+    watchdog = timer
+    RunLoop.main.add(timer, forMode: .common)
   }
 
   private func stop() {
-    started = false; tracked = false; lease = 0; fix = nil
+    stopped = true; started = false; tracked = false; lease = 0; fix = nil
+    watchdog?.invalidate(); watchdog = nil
     scene.session.pause(); location.stopUpdatingLocation()
     dots.children.forEach { $0.removeFromParent() }
     scene.isHidden = true
@@ -188,6 +198,7 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
     }
   }
   deinit {
+    watchdog?.invalidate()
     if let observer = backgroundObserver { NotificationCenter.default.removeObserver(observer) }
     scene.session.pause(); location.stopUpdatingLocation(); channel.setMethodCallHandler(nil)
   }
