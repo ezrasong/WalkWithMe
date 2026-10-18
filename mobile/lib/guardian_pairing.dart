@@ -99,7 +99,7 @@ class _GuardianPairingScreenState extends State<GuardianPairingScreen>
           padding: const EdgeInsets.all(20),
           children: [
             const Text(
-              'On their phone, open KAZE → Join as guardian → Scan QR code. Or tell them the pairing code below.',
+              'On their phone, open WalkWithMe → Join as guardian → Scan QR code. Or tell them the pairing code below.',
             ),
             const SizedBox(height: 16),
             if (loading) const Center(child: CircularProgressIndicator()),
@@ -113,7 +113,8 @@ class _GuardianPairingScreenState extends State<GuardianPairingScreen>
                       data: current.qrData,
                       backgroundColor: Colors.white,
                       padding: const EdgeInsets.all(20),
-                      semanticsLabel: 'Private KAZE guardian pairing QR code',
+                      semanticsLabel:
+                          'Private WalkWithMe guardian pairing QR code',
                     ),
                   ),
                 ),
@@ -265,7 +266,7 @@ class _GuardianScannerScreenState extends State<GuardianScannerScreen>
                       child: Padding(
                         padding: EdgeInsets.all(20),
                         child: Text(
-                          'Camera unavailable. Allow Camera access for KAZE in your phone’s Settings, or go back and enter the pairing code.',
+                          'Camera unavailable. Allow Camera access for WalkWithMe in your phone’s Settings, or go back and enter the pairing code.',
                         ),
                       ),
                     ),

@@ -21,24 +21,24 @@ String guardianPairingCode(String value) {
 
 String guardianCodeFromQr(String value, {String baseUrl = kazeBackendUrl}) {
   if (value.length > 2048) {
-    throw const FormatException('Scan a KAZE guardian QR code.');
+    throw const FormatException('Scan a WalkWithMe guardian QR code.');
   }
   final dynamic data;
   try {
     data = jsonDecode(value);
   } catch (_) {
-    throw const FormatException('Scan a KAZE guardian QR code.');
+    throw const FormatException('Scan a WalkWithMe guardian QR code.');
   }
   if (data is! Map ||
       data['app'] != 'KAZE' ||
       data['version'] != 1 ||
       data['baseUrl'] is! String ||
       data['code'] is! String) {
-    throw const FormatException('Scan a KAZE guardian QR code.');
+    throw const FormatException('Scan a WalkWithMe guardian QR code.');
   }
   if (validateBaseUrl(data['baseUrl']) != validateBaseUrl(baseUrl)) {
     throw const FormatException(
-      'This QR code belongs to a different KAZE service. Ask for a current invitation.',
+      'This QR code belongs to a different WalkWithMe service. Ask for a current invitation.',
     );
   }
   return guardianPairingCode(data['code']);
@@ -77,7 +77,7 @@ String validateBaseUrl(String input, {bool allowLocalHttp = kDebugMode}) {
       uri.hasQuery ||
       uri.hasFragment ||
       (uri.path.isNotEmpty && uri.path != '/')) {
-    throw const FormatException('Invalid KAZE server address.');
+    throw const FormatException('Invalid WalkWithMe server address.');
   }
   final ip = InternetAddress.tryParse(uri.host);
   final b = ip?.rawAddress;
@@ -91,7 +91,9 @@ String validateBaseUrl(String input, {bool allowLocalHttp = kDebugMode}) {
               (b[0] == 172 && b[1] >= 16 && b[1] <= 31)));
   if (uri.scheme != 'https' &&
       !(allowLocalHttp && uri.scheme == 'http' && local)) {
-    throw const FormatException('KAZE requires a secure server connection.');
+    throw const FormatException(
+      'WalkWithMe requires a secure server connection.',
+    );
   }
   return uri.replace(path: '').toString();
 }
@@ -215,7 +217,9 @@ class SessionController extends ChangeNotifier {
       }
     } catch (_) {
       if (current != access || startedRevision != revision || disposed) return;
-      device = {'status': 'Background monitoring unavailable. Keep KAZE open.'};
+      device = {
+        'status': 'Background monitoring unavailable. Keep WalkWithMe open.',
+      };
     }
   }
 
@@ -316,7 +320,7 @@ class SessionController extends ChangeNotifier {
     } catch (_) {
       throw ApiFailure(
         response.statusCode,
-        'The server did not return a KAZE response.',
+        'The server did not return a WalkWithMe response.',
       );
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -633,7 +637,7 @@ class SessionController extends ChangeNotifier {
     if (Uri.parse(next.baseUrl).origin !=
         Uri.parse(validateBaseUrl(kazeBackendUrl)).origin) {
       throw const FormatException(
-        'This invitation belongs to a different KAZE service. Ask the wearer for a current invitation.',
+        'This invitation belongs to a different WalkWithMe service. Ask the wearer for a current invitation.',
       );
     }
     await _ensureGuardianDevice();

@@ -42,7 +42,7 @@ public final class GuardianService extends Service {
     public static void enable(Context c, String raw) throws Exception {
         Config.guardian(raw); // A guardian credential is required; no owner/watch alias.
         channels(c);
-        if (!alertsAvailable(c)) throw new IllegalStateException("Allow KAZE guardian notifications in Android Settings first.");
+        if (!alertsAvailable(c)) throw new IllegalStateException("Allow WalkWithMe guardian notifications in Android Settings first.");
         synchronized (LOCK) {
             if (Config.prefs(c).getBoolean("active", false)) throw new IllegalStateException("End wearer recording before enabling guardian alerts.");
             // Launch first: Android may reject a foreground-service start. Do not
@@ -58,7 +58,7 @@ public final class GuardianService extends Service {
             }
         }
     }
-    public static void disable(Context c) { disable(c, "Background guardian alerts off. Keep KAZE open for updates."); }
+    public static void disable(Context c) { disable(c, "Background guardian alerts off. Keep WalkWithMe open for updates."); }
     private static void disable(Context c, String reason) {
         synchronized (LOCK) {
             prefs(c).edit().clear().putString("status", reason).commit();
@@ -74,7 +74,7 @@ public final class GuardianService extends Service {
             result.put("enabled", enabled(c)); result.put("running", running);
             result.put("notificationsAllowed", alertsAvailable(c));
             result.put("lastSync", p.getLong("lastSync", 0));
-            result.put("status", p.getString("status", "Background guardian alerts off. Keep KAZE open for updates."));
+            result.put("status", p.getString("status", "Background guardian alerts off. Keep WalkWithMe open for updates."));
             try { result.put("sessionId", Config.guardian(p.getString("config", "")).id); } catch (Exception ignored) {}
             return result;
         }
@@ -84,7 +84,7 @@ public final class GuardianService extends Service {
         if (intent != null && STOP.equals(intent.getAction())) { disable(this); return START_NOT_STICKY; }
         synchronized (LOCK) {
             if (!enabled(this) || prefs(this).getInt("boot", -1) != boot(this)) {
-                disable(this, "Reopen KAZE and enable guardian alerts to confirm access."); stopSelf(); return START_NOT_STICKY;
+                disable(this, "Reopen WalkWithMe and enable guardian alerts to confirm access."); stopSelf(); return START_NOT_STICKY;
             }
             Notification note = notification("Guardian monitoring starting", MONITOR_CHANNEL, true);
             if (Build.VERSION.SDK_INT >= 29) startForeground(MONITOR_ID, note,
@@ -138,11 +138,11 @@ public final class GuardianService extends Service {
                 boolean acknowledged = !data.isNull("acknowledgedAt");
                 if (acknowledged) { manager.cancel(ALERT_ID); p.edit().putBoolean("alertNotified", true).apply(); }
                 if ("alert".equals(phase) && !acknowledged && !p.getBoolean("alertNotified", false) && alertsAvailable(this)) {
-                    manager.notify(ALERT_ID, notification("A check-in went unanswered. Open KAZE to review the request.", ALERT_CHANNEL, false));
+                    manager.notify(ALERT_ID, notification("A check-in went unanswered. Open WalkWithMe to review the request.", ALERT_CHANNEL, false));
                     p.edit().putBoolean("alertNotified", true).commit();
                 }
                 String message = !alertsAvailable(this) ? "Guardian notifications blocked. Open Android notification settings." :
-                    "alert".equals(phase) ? "Unanswered check-in. Open KAZE to review." : "Monitoring guardian session in the background";
+                    "alert".equals(phase) ? "Unanswered check-in. Open WalkWithMe to review." : "Monitoring guardian session in the background";
                 p.edit().putString("status", message).apply();
                 manager.notify(MONITOR_ID, notification(message, MONITOR_CHANNEL, true));
             }
@@ -165,7 +165,7 @@ public final class GuardianService extends Service {
     }
     private Notification notification(String text, String channel, boolean ongoing) {
         Notification.Builder builder = new Notification.Builder(this, channel)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("KAZE guardian - simulation")
+            .setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("WalkWithMe guardian - simulation")
             .setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text))
             .setVisibility(Notification.VISIBILITY_PRIVATE).setOnlyAlertOnce(true).setOngoing(ongoing).setAutoCancel(!ongoing);
         Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());

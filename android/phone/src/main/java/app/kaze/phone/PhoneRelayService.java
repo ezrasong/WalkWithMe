@@ -15,7 +15,7 @@ public final class PhoneRelayService extends WearableListenerService {
             try {
                 boolean active = owner != null && Config.prefs(this).getBoolean("active", false);
                 Wearable.getMessageClient(this).sendMessage(event.getSourceNodeId(), active ? WatchPairing.CONFIG : WatchPairing.STATUS,
-                    (active ? owner.forWatch() : "Start a safety session in KAZE on your phone first.").getBytes(StandardCharsets.UTF_8));
+                    (active ? owner.forWatch() : "Start a safety session in WalkWithMe on your phone first.").getBytes(StandardCharsets.UTF_8));
             } catch (Exception ignored) { /* The watch retries discovery while its screen is open. */ }
             return;
         }

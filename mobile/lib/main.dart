@@ -69,7 +69,7 @@ class _KazeAppState extends State<KazeApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'KAZE',
+    title: 'WalkWithMe',
     debugShowCheckedModeBanner: false,
     theme: kazeTheme(Brightness.light),
     darkTheme: kazeTheme(Brightness.dark),
@@ -83,11 +83,25 @@ class _KazeAppState extends State<KazeApp> {
 
 ThemeData kazeTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
-  final colors = ColorScheme.fromSeed(
-    seedColor: const Color(0xff245caa),
-    brightness: brightness,
-    surface: dark ? const Color(0xff1c1e23) : Colors.white,
-  );
+  const deepBlue = Color(0xff1746a2);
+  final colors =
+      ColorScheme.fromSeed(
+        seedColor: deepBlue,
+        brightness: brightness,
+        surface: dark ? const Color(0xff11151c) : const Color(0xfff7f8fa),
+      ).copyWith(
+        primary: dark ? const Color(0xff4f7cff) : deepBlue,
+        onPrimary: Colors.white,
+        secondary: dark ? const Color(0xff7597ff) : const Color(0xff2859b8),
+        surfaceContainerLowest: dark ? const Color(0xff080a0e) : Colors.white,
+        surfaceContainerLow: dark
+            ? const Color(0xff151a23)
+            : const Color(0xffeef1f6),
+        surfaceContainer: dark
+            ? const Color(0xff1a202b)
+            : const Color(0xffe7ebf2),
+        outline: dark ? const Color(0xff343d4d) : const Color(0xffc1c8d4),
+      );
   return ThemeData(
     colorScheme: colors,
     cupertinoOverrideTheme: CupertinoThemeData(
@@ -97,8 +111,8 @@ ThemeData kazeTheme(Brightness brightness) {
     ),
     useMaterial3: true,
     scaffoldBackgroundColor: dark
-        ? const Color(0xff101216)
-        : const Color(0xfff3f4f7),
+        ? const Color(0xff080a0e)
+        : const Color(0xffeef1f5),
     textTheme: const TextTheme(
       headlineSmall: TextStyle(
         fontSize: 28,
@@ -296,14 +310,14 @@ class _SessionScreenState extends State<SessionScreen>
         ? CupertinoNavigationBar(
             middle: Text(
               c.access == null
-                  ? 'KAZE'
+                  ? 'WalkWithMe'
                   : ['Session', 'Activity', 'Settings'][tab],
             ),
           )
         : AppBar(
             title: Text(
               c.access == null
-                  ? 'KAZE'
+                  ? 'WalkWithMe'
                   : ['Session', 'Activity', 'Settings'][tab],
             ),
           ),
@@ -519,7 +533,7 @@ class _SessionScreenState extends State<SessionScreen>
           ),
         ]),
       note(
-        'Android guardians can enable background monitoring. iPhone guardians can enable local review reminders; these cannot confirm a missed check-in while KAZE is closed. Apple push requires paid-team signing and server setup. No emergency dispatch, calls or SMS are connected. The PC and network must stay running.',
+        'Android guardians can enable background monitoring. iPhone guardians can enable local review reminders; these cannot confirm a missed check-in while WalkWithMe is closed. Apple push requires paid-team signing and server setup. No emergency dispatch, calls or SMS are connected. The PC and network must stay running.',
       ),
       note(
         'OpenFreeMap serves vector maps using OpenStreetMap data and receives the viewed area and IP address. You can turn the street map off in Settings.',
@@ -596,7 +610,8 @@ class _SessionScreenState extends State<SessionScreen>
                 : 'Background guardian alerts',
           ),
           subtitle: Text(
-            c.device['status'] as String? ?? 'Off. Keep KAZE open for updates.',
+            c.device['status'] as String? ??
+                'Off. Keep WalkWithMe open for updates.',
           ),
           value: c.device['enabled'] == true,
           onChanged: c.busy ? null : c.setGuardianMonitoring,
@@ -605,15 +620,15 @@ class _SessionScreenState extends State<SessionScreen>
             c.device['enabled'] == true &&
             c.device['running'] != true)
           note(
-            'Android has not confirmed the monitor is running. Turn it off and on again while KAZE is open.',
+            'Android has not confirmed the monitor is running. Turn it off and on again while WalkWithMe is open.',
           ),
         note(
           c.iosGuardian
-              ? 'With a free Apple Account, reminders use the last known deadline and may be stale after a wearer check-in or access change. Reopen KAZE to verify status. Remote push requires a paid Apple Developer team, signing capability and server credentials; physical delivery is unverified. Focus and notification settings can suppress notifications.'
+              ? 'With a free Apple Account, reminders use the last known deadline and may be stale after a wearer check-in or access change. Reopen WalkWithMe to verify status. Remote push requires a paid Apple Developer team, signing capability and server credentials; physical delivery is unverified. Focus and notification settings can suppress notifications.'
               : 'Uses a persistent Android notification and an internet connection. Battery restrictions, notification settings, force-stop or restarting the phone can interrupt delivery. Review Permissions & background setup.',
         ),
       ] else
-        note('Keep KAZE open for guardian updates on this device.'),
+        note('Keep WalkWithMe open for guardian updates on this device.'),
     ],
   );
 
@@ -718,7 +733,7 @@ class _SessionScreenState extends State<SessionScreen>
             ),
           )
         else
-          note('Keep KAZE open for guardian updates on this device.'),
+          note('Keep WalkWithMe open for guardian updates on this device.'),
     ]);
     final location = Card(
       child: ListTile(
@@ -1279,7 +1294,7 @@ class _SessionScreenState extends State<SessionScreen>
               leading: Icon(Icons.watch_outlined),
               title: Text('Watch connects automatically'),
               subtitle: Text(
-                'Open KAZE on your paired watch, then tap Check in.',
+                'Open WalkWithMe on your paired watch, then tap Check in.',
               ),
             ),
         ]),
@@ -1373,7 +1388,10 @@ class _SessionScreenState extends State<SessionScreen>
           action(
             Icons.info_outline,
             'Licenses & map credits',
-            () => showLicensePage(context: context, applicationName: 'KAZE'),
+            () => showLicensePage(
+              context: context,
+              applicationName: 'WalkWithMe',
+            ),
           ),
         ]),
       ],

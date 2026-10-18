@@ -13,7 +13,7 @@ public final class WatchService extends MonitoringService {
         PendingIntent touch = PendingIntent.getActivity(this, 0, open,
             PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "recording")
-            .setSmallIcon(android.R.drawable.ic_dialog_map).setContentTitle("KAZE")
+            .setSmallIcon(android.R.drawable.ic_dialog_map).setContentTitle("WalkWithMe")
             .setContentText("Safety session active").setOngoing(true).setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_LOCATION_SHARING).setContentIntent(touch);
         new OngoingActivity.Builder(this, 1, builder).setStaticIcon(android.R.drawable.ic_dialog_map)

@@ -110,10 +110,13 @@ void main() {
       await tester.tap(find.text('Allow background battery use'));
       await tester.pumpAndSettle();
       expect(calls, contains('batterySettings'));
-      await tester.scrollUntilVisible(find.text('Open KAZE app settings'), 350);
-      await tester.ensureVisible(find.text('Open KAZE app settings'));
+      await tester.scrollUntilVisible(
+        find.text('Open WalkWithMe app settings'),
+        350,
+      );
+      await tester.ensureVisible(find.text('Open WalkWithMe app settings'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Open KAZE app settings'));
+      await tester.tap(find.text('Open WalkWithMe app settings'));
       await tester.pumpAndSettle();
       expect(calls, contains('appSettings'));
       expect(
@@ -130,7 +133,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const KazeApp());
     await tester.pumpAndSettle();
-    expect(find.text('Set up KAZE'), findsOneWidget);
+    expect(find.text('Set up WalkWithMe'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Continue'), 450);
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
@@ -139,7 +142,7 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
     await tester.pumpWidget(const KazeApp());
     await tester.pumpAndSettle();
-    expect(find.text('Set up KAZE'), findsNothing);
+    expect(find.text('Set up WalkWithMe'), findsNothing);
     expect(find.text('Permissions & background setup'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     debugDefaultTargetPlatformOverride = null;
@@ -155,12 +158,15 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(const KazeApp());
       await tester.pumpAndSettle();
-      expect(find.text('Set up KAZE'), findsNothing);
+      expect(find.text('Set up WalkWithMe'), findsNothing);
       expect(
         Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
         Brightness.dark,
       );
-      expect(calls.where((c) => c != 'setupStatus' && c != 'stopGuardian'), isEmpty);
+      expect(
+        calls.where((c) => c != 'setupStatus' && c != 'stopGuardian'),
+        isEmpty,
+      );
       await tester.pumpWidget(const SizedBox());
       debugDefaultTargetPlatformOverride = null;
     },

@@ -41,7 +41,7 @@ final class GuardianNotifications {
     case "guardianPermissions":
       center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
         DispatchQueue.main.async {
-          result(granted ? nil : FlutterError(code: "notifications", message: "Allow KAZE notifications in iPhone Settings first.", details: nil))
+          result(granted ? nil : FlutterError(code: "notifications", message: "Allow WalkWithMe notifications in iPhone Settings first.", details: nil))
         }
       }
     case "guardianStatus":
@@ -53,11 +53,11 @@ final class GuardianNotifications {
           value["pushAvailable"] = self.pushConfigured
           value["running"] = false // iOS has no continuously running monitor.
           value["mode"] = value["pushRegistered"] as? Bool == true ? "apple-push" : "local-reminder"
-          value["status"] = !allowed ? "iPhone notifications blocked. Keep KAZE open and review Settings." :
+          value["status"] = !allowed ? "iPhone notifications blocked. Keep WalkWithMe open and review Settings." :
             value["tokenChanged"] as? Bool == true ? "Apple device registration changed. Turn notifications off and on while connected. Local review reminders only." :
             value["enabled"] as? Bool != true ?
               (value["pushRegistered"] as? Bool == true || value["pushPending"] as? Bool == true ?
-                "Stopped locally. Remote removal is pending; reconnect and turn notifications off again." : "Off. Keep KAZE open for updates.") :
+                "Stopped locally. Remote removal is pending; reconnect and turn notifications off again." : "Off. Keep WalkWithMe open for updates.") :
             value["pushRegistered"] as? Bool == true ? "Apple push registered. Delivery still needs physical testing." :
             "Local review reminders only. Background session status is not verified."
           result(value)
@@ -77,7 +77,7 @@ final class GuardianNotifications {
             result(FlutterError(code: "cancelled", message: "Guardian setup cancelled.", details: nil)); return
           }
           guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else {
-            result(FlutterError(code: "notifications", message: "Allow KAZE notifications in iPhone Settings first.", details: nil)); return
+            result(FlutterError(code: "notifications", message: "Allow WalkWithMe notifications in iPhone Settings first.", details: nil)); return
           }
           self.cancelReminder()
           // No guardian credential, private link or location is persisted by this helper.
@@ -106,7 +106,7 @@ final class GuardianNotifications {
       cancelReminder(); state = [:]; result(nil)
     case "guardianPushRegistered":
       guard state["enabled"] as? Bool == true, call.arguments as? String == state["registrationId"] as? String else {
-        result(FlutterError(code: "cancelled", message: "Guardian setup changed. Retry while KAZE is open.", details: nil)); return
+        result(FlutterError(code: "cancelled", message: "Guardian setup changed. Retry while WalkWithMe is open.", details: nil)); return
       }
       cancelReminder(); var next = state; next["pushRegistered"] = true; next["pushPending"] = false
       next["tokenFingerprint"] = deviceToken.map { fingerprint($0) }; next["tokenChanged"] = false
@@ -141,8 +141,8 @@ final class GuardianNotifications {
     let identifier = "kaze-guardian-review-" + UUID().uuidString
     var next = state; next["deadline"] = plan.deadline; next["requestIdentifier"] = identifier; state = next
     let content = UNMutableNotificationContent()
-    content.title = "KAZE guardian — simulation"
-    content.body = "Time to review the session. Open KAZE to check; background status has not been verified."
+    content.title = "WalkWithMe guardian — simulation"
+    content.body = "Time to review the session. Open WalkWithMe to check; background status has not been verified."
     content.sound = .default
     let trigger = UNTimeIntervalNotificationTrigger(timeInterval: plan.delay, repeats: false)
     center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)) { error in

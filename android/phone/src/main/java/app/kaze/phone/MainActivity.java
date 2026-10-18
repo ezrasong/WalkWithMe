@@ -142,7 +142,7 @@ public final class MainActivity extends FlutterActivity {
     }
     private void openSetupSettings(Intent intent, MethodChannel.Result result) {
         try { startActivity(intent); result.success(null); }
-        catch (RuntimeException e) { result.error("settings", "Open this phone's Settings and select KAZE under Apps.", null); }
+        catch (RuntimeException e) { result.error("settings", "Open this phone's Settings and select WalkWithMe under Apps.", null); }
     }
     private void requestRecordingPermissions(MethodChannel.Result result) {
         if (permissionResult != null) { result.error("pending", "Permission request already open", null); return; }

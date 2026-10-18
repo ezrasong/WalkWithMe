@@ -283,7 +283,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.textContaining('Scan a KAZE guardian QR code.'),
+        find.textContaining('Scan a WalkWithMe guardian QR code.'),
         findsOneWidget,
       );
       widget = tester.widget<MobileScanner>(find.byType(MobileScanner));

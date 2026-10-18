@@ -11,7 +11,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>KAZE</string>
+	<string>WalkWithMe</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -19,7 +19,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>kaze</string>
+	<string>WalkWithMe</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -29,11 +29,11 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
     <key>NSCameraUsageDescription</key>
-    <string>Scan a guardian pairing QR code or use optional guardian AR and direction preview. Camera processing stays on this phone; KAZE does not record or upload footage.</string>
+    <string>Scan a guardian pairing QR code or use optional guardian AR and direction preview. Camera processing stays on this phone; WalkWithMe does not record or upload footage.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Register the guardian AR camera against recorded locations using precise outdoor movement, or show an approximate direction cue.</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Connect to your private KAZE server hosted on your PC.</string>
+    <string>Connect to your private WalkWithMe server hosted on your PC.</string>
     <key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

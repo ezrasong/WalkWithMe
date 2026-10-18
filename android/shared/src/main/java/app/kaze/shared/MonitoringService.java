@@ -161,7 +161,7 @@ public abstract class MonitoringService extends Service implements SensorRecorde
     private Notification notification(String text, String channel, boolean response) {
         Intent open = new Intent(this, activityClass());
         Notification.Builder builder = new Notification.Builder(this, channel).setSmallIcon(android.R.drawable.ic_dialog_map)
-            .setContentTitle("KAZE · team simulation").setContentText(text).setOngoing(!response)
+            .setContentTitle("WalkWithMe · team simulation").setContentText(text).setOngoing(!response)
             .setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
         if (response) {
             // Wear OS's local collector also reads the legacy alert fields.

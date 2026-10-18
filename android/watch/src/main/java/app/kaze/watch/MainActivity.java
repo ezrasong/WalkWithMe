@@ -34,7 +34,7 @@ public final class MainActivity extends Activity {
         boolean alert = "alert".equals(phase), resolved = "resolved".equals(phase);
         status.setText(checkingIn ? "Confirming check-in…" : active ? alert ? "Assistance requested" : secs > 0 ? "Safety session active" : "Time to check in"
             : connecting ? "Connecting to phone…" : resolved ? "Session ended" : "Looking for phone…");
-        countdown.setText(active ? alert ? "Use phone to end" : secs > 0 ? String.format(java.util.Locale.getDefault(), "%d:%02d", secs / 60, secs % 60) : "Response due" : "KAZE");
+        countdown.setText(active ? alert ? "Use phone to end" : secs > 0 ? String.format(java.util.Locale.getDefault(), "%d:%02d", secs / 60, secs % 60) : "Response due" : "WalkWithMe");
         countdown.setTextSize(alert ? 18 : 30);
         lastCheckIn.setText(checkingIn ? "Waiting for server confirmation" : message.startsWith("Not confirmed") ? "Check-in not confirmed. Retry."
             : message.startsWith("Recording could not") ? message
@@ -94,7 +94,7 @@ public final class MainActivity extends Activity {
                     getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     if (isDestroyed() || isFinishing()) { WatchPairing.finishStart(); return; }
                     try { startForegroundService(new Intent(this,WatchService.class)); }
-                    catch (Exception e) { failedStart("Recording could not start. Reopen KAZE and retry."); }
+                    catch (Exception e) { failedStart("Recording could not start. Reopen WalkWithMe and retry."); }
                 });
             } catch (Exception e) { runOnUiThread(() -> failedStart("Could not connect: " + e.getMessage())); }
         });
@@ -107,7 +107,7 @@ public final class MainActivity extends Activity {
             // A force-stop removes the service but retains the consented session.
             // The existing service entry point is idempotent and checks session control.
             try { startForegroundService(new Intent(this, WatchService.class).setAction(MonitoringService.REFRESH)); }
-            catch (RuntimeException e) { Config.prefs(this).edit().putString("status", "Recording could not resume. Reopen KAZE and retry.").apply(); }
+            catch (RuntimeException e) { Config.prefs(this).edit().putString("status", "Recording could not resume. Reopen WalkWithMe and retry.").apply(); }
         } else discover();
         handler.post(refresh);
     }

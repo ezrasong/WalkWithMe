@@ -52,7 +52,7 @@ void main() {
       await c.join('https://other.example/guardian#session=$id&token=$token');
       expect(requests, 0);
       expect(c.access, isNull);
-      expect(c.message, contains('different KAZE service'));
+      expect(c.message, contains('different WalkWithMe service'));
       await c.join('$kazeBackendUrl/guardian#session=$id&token=$token');
       expect(requests, greaterThan(0));
       expect(c.access?.role, 'guardian');

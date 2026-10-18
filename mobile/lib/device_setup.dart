@@ -48,7 +48,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen>
     } catch (_) {
       if (mounted) {
         setState(
-          () => error = 'Could not read device settings. Review KAZE permissions in Settings.',
+          () => error = 'Could not read device settings. Review WalkWithMe permissions in Settings.',
         );
       }
     }
@@ -74,7 +74,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen>
     } catch (_) {
       if (mounted) {
         setState(
-          () => error = 'Open this phone’s Settings and select KAZE to change this setting.',
+          () => error = 'Open this phone’s Settings and select WalkWithMe to change this setting.',
         );
       }
     } finally {
@@ -124,7 +124,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen>
         ? yes
         : no;
     return Scaffold(
-      appBar: AppBar(title: const Text('Set up KAZE')),
+      appBar: AppBar(title: const Text('Set up WalkWithMe')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
@@ -195,7 +195,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen>
                   'Battery optimization',
                   known(
                     battery,
-                    'KAZE is exempt from Android battery optimization.',
+                    'WalkWithMe is exempt from Android battery optimization.',
                     'Optimization is on. Android may delay background work.',
                   ),
                   battery,
@@ -223,13 +223,13 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen>
                 ),
                 Text(
                   vivo
-                      ? 'Vivo: App info → Battery usage → Background power control → Allow background power usage. Smart control can freeze KAZE even during an active session.'
-                      : 'In KAZE App info, allow background usage or choose Unrestricted under Battery. Some phones have an additional auto-start control.',
+                      ? 'Vivo: App info → Battery usage → Background power control → Allow background power usage. Smart control can freeze WalkWithMe even during an active session.'
+                      : 'In WalkWithMe App info, allow background usage or choose Unrestricted under Battery. Some phones have an additional auto-start control.',
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton(
                   onPressed: busy ? null : () => act('appSettings'),
-                  child: const Text('Open KAZE app settings'),
+                  child: const Text('Open WalkWithMe app settings'),
                 ),
                 const SizedBox(height: 8),
                 const Text(

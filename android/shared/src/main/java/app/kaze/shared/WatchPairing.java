@@ -35,7 +35,7 @@ public final class WatchPairing {
     public static synchronized void request(Context c) {
         if (locked(c)) return;
         discovering = true;
-        if (Config.load(c, true) == null) Config.prefs(c).edit().putString("status", "Looking for KAZE on your paired phone…").apply();
+        if (Config.load(c, true) == null) Config.prefs(c).edit().putString("status", "Looking for WalkWithMe on your paired phone…").apply();
         Wearable.getNodeClient(c).getConnectedNodes().addOnSuccessListener(nodes -> {
             if (nodes.isEmpty()) { unavailable(c, "Connect your watch to the phone in Galaxy Wearable."); return; }
             Wearable.getMessageClient(c).sendMessage(nodes.get(0).getId(), REQUEST, new byte[0])

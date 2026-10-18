@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 public final class PairingListener extends WearableListenerService {
     @Override public void onMessageReceived(MessageEvent event) {
         if (event.getPath().equals("/kaze/response")) Relay.receive(event.getData());
-        if (event.getPath().equals(WatchPairing.STATUS)) WatchPairing.unavailable(this, "Start a safety session in KAZE on your phone first.");
+        if (event.getPath().equals(WatchPairing.STATUS)) WatchPairing.unavailable(this, "Start a safety session in WalkWithMe on your phone first.");
         if (event.getPath().equals(WatchPairing.CONFIG)) {
             try {
                 WatchPairing.accept(this, new String(event.getData(), StandardCharsets.UTF_8));
