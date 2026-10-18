@@ -535,7 +535,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
       : Scaffold(
           appBar: AppBar(
             title: Text(
-              widget.demo ? 'Guardian camera demo' : 'Outdoor spatial AR',
+              widget.demo ? 'Camera walk preview' : 'Outdoor spatial AR',
             ),
           ),
           body: SafeArea(

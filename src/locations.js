@@ -66,6 +66,6 @@ export function geographicTrail(events, now, { simulation = false } = {}) {
       ...(latest && now - latest.fixAt > 30000 ? ['Last location is stale. The person may have moved.'] : []),
       ...(fixes.some(f => f.source === 'watch') ? ['Watch location may come from the paired phone. Sources are shown separately.'] : []),
       ...(gaps.length ? ['Broken trail sections have missing or uncertain location. No route is inferred across them.'] : []),
-      ...(fixes.length ? [simulation ? 'Demo trail preserves the generated route samples and corners.' : 'Trail vertices use the most accurate fix per second and omit movement within reported precision. Raw readings are retained.'] : []),
-      ...(fixes.some(f => f.mock) ? [simulation ? 'DEMO: simulated locations are not physical measurements.' : 'Mock locations are test evidence, not physical measurements.'] : [])] };
+      ...(fixes.length ? [simulation ? 'Generated trail preserves route samples and corners.' : 'Trail vertices use the most accurate fix per second and omit movement within reported precision. Raw readings are retained.'] : []),
+      ...(fixes.some(f => f.mock) ? [simulation ? 'Simulated locations are not physical measurements.' : 'Mock locations are test evidence, not physical measurements.'] : [])] };
 }

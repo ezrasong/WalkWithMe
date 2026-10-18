@@ -267,16 +267,16 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
       await tester.pumpAndSettle();
       expect(find.text('Start shared walk'), findsNothing);
-      expect(find.text('Try guardian camera demo'), findsNothing);
+      expect(find.text('Camera walk preview'), findsNothing);
       await tester.ensureVisible(find.text('Settings'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Demo mode'));
+      await tester.tap(find.text('Presentation mode'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
-      expect(find.text('Try guardian camera demo'), findsOneWidget);
+      expect(find.text('Camera walk preview'), findsOneWidget);
       expect(
         await const FlutterSecureStorage().read(key: 'showDemoControls'),
         'true',
@@ -289,12 +289,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Demo mode'));
+      await tester.tap(find.text('Presentation mode'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
       expect(find.text('Start shared walk'), findsNothing);
-      expect(find.text('Try guardian camera demo'), findsNothing);
+      expect(find.text('Camera walk preview'), findsNothing);
       expect(
         await const FlutterSecureStorage().read(key: 'showDemoControls'),
         'false',
@@ -354,7 +354,7 @@ void main() {
     expect(c.access?.role, 'guardian');
     await c.setGuardianMonitoring(true);
     expect(starts, 1);
-    expect(c.message, contains('Enable demo mode'));
+    expect(c.message, contains('Enable presentation mode'));
   });
 
   test('demo off preserves live guardian alerts and access', () async {
@@ -407,9 +407,9 @@ void main() {
       screen.tab = 2;
       c.changed();
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Try guardian camera demo'));
+      await tester.ensureVisible(find.text('Camera walk preview'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Try guardian camera demo'));
+      await tester.tap(find.text('Camera walk preview'));
       await tester.pumpAndSettle();
       expect(find.byType(GuardianAr), findsOneWidget);
       expect(calls, contains('prepareGuardianAr'));
@@ -418,7 +418,7 @@ void main() {
       screen.setDemoControls(false);
       await tester.pumpAndSettle();
       expect(find.byType(GuardianAr), findsNothing);
-      expect(find.text('Try guardian camera demo'), findsNothing);
+      expect(find.text('Camera walk preview'), findsNothing);
       expect(c.access, same(access));
       expect(c.snapshot?['sensorMode'], 'device');
       await tester.pumpWidget(const SizedBox());

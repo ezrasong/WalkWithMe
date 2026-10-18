@@ -34,28 +34,28 @@ export function advanceDemo(walk, now) {
 }
 
 export function controlDemo(session, body, now) {
-  if (session.sensorMode !== 'simulated') throw new Problem(409, 'Use a separate simulated session for demo movement');
+  if (session.sensorMode !== 'simulated') throw new Problem(409, 'Use a separate simulated session for generated movement');
   let walk = advanceDemo(session.demoWalk, now);
   if (body.command === 'start') {
     if (body.consent !== true || !Array.isArray(body.route) || body.route.length < 2 || body.route.length > 40)
-      throw new Problem(400, 'Confirm sharing a demo route of 2-40 points');
-    const route = body.route.map(p => ({ latitude: number(p?.latitude, -85, 85, 'demo latitude'),
-      longitude: number(p?.longitude, -180, 180, 'demo longitude'),
-      ...(p?.street == null ? {} : { street: label(p.street, 60, 'demo street') }) }));
+      throw new Problem(400, 'Confirm sharing a route of 2-40 points');
+    const route = body.route.map(p => ({ latitude: number(p?.latitude, -85, 85, 'route latitude'),
+      longitude: number(p?.longitude, -180, 180, 'route longitude'),
+      ...(p?.street == null ? {} : { street: label(p.street, 60, 'route street') }) }));
     const lengths = route.slice(1).map((p, i) => meters(route[i], p));
     const total = lengths.reduce((sum, d) => sum + d, 0);
-    if (lengths.some(d => d < .5) || total < 10 || total > 2000) throw new Problem(400, 'Demo route must span 10-2000 metres with distinct points');
+    if (lengths.some(d => d < .5) || total < 10 || total > 2000) throw new Problem(400, 'Route must span 10-2000 metres with distinct points');
     walk = { runId: randomUUID(), route, total, distance: 0, speed: 1,
       running: true, stopAt: null, updatedAt: now, samples: [{ distance: 0, at: now }] };
   } else {
-    if (!walk) throw new Problem(409, 'Start a demo route first');
+    if (!walk) throw new Problem(409, 'Start a shared walk first');
     if (body.command === 'pause') walk = { ...walk, running: false };
     else if (body.command === 'resume') walk = { ...walk, running: walk.distance < walk.total, updatedAt: now,
       stopAt: walk.stopAt != null && now >= walk.stopAt ? null : walk.stopAt };
     else if (body.command === 'restart') walk = { ...walk, runId: randomUUID(), distance: 0,
       running: true, stopAt: null, updatedAt: now, samples: [{ distance: 0, at: now }] };
     else if (body.command === 'speed' && [1, 2, 4].includes(body.speed)) walk = { ...walk, speed: body.speed };
-    else throw new Problem(400, 'Invalid demo control');
+    else throw new Problem(400, 'Invalid playback control');
   }
   return walk;
 }
@@ -73,9 +73,9 @@ export function demoEvents(walk, now) {
 // movement controls and real wearer sessions never re-arm an assistance request.
 export function beginDemoTake(session, body, now) {
   if (session.sensorMode !== 'simulated' || !session.demoWalk || ['resolved', 'expired'].includes(session.phase))
-    throw new Problem(409, 'Start an active shared walking demo first');
+    throw new Problem(409, 'Start an active shared walk first');
   if (body.confirm !== true) throw new Problem(400, 'Confirm restarting the simulated walk and alert countdown');
-  if (session.expiresAt <= now + 40000) throw new Problem(409, 'Demo expires too soon; start a new demo session');
+  if (session.expiresAt <= now + 40000) throw new Problem(409, 'Session expires too soon; start a new shared walk');
   const result = { ...session, phase: 'armed', intervalSeconds: 30, graceSeconds: 10, dueAt: now + 30000,
     demoWalk: { ...controlDemo(session, { command: 'restart' }, now), speed: 1, stopAt: now + 40000 } };
   for (const key of ['escalatedAt', 'acknowledgedAt', 'arrivalReportedAt', 'alertSeenAt', 'lastCheckInAt']) delete result[key];

@@ -306,9 +306,9 @@ class _SessionScreenState extends State<SessionScreen>
 
   Widget demoModeSwitch() => SwitchListTile.adaptive(
     contentPadding: EdgeInsets.zero,
-    title: const Text('Demo mode'),
+    title: const Text('Presentation mode'),
     subtitle: const Text(
-      'Enable guardian camera practice and shared simulated walks. Turning off hides all demo screens, controls and simulated session data on this phone. Live sessions stay available.',
+      'Enable guardian camera practice and shared simulated walks. Turning off hides presentation screens, controls and simulated session data on this phone. Live sessions stay available.',
     ),
     value: showDemoControls,
     onChanged: setDemoControls,
@@ -651,7 +651,7 @@ class _SessionScreenState extends State<SessionScreen>
             onPressed: () =>
                 openGuardianCamera(GuardianAr(session: c, demo: true)),
             icon: const Icon(Icons.view_in_ar),
-            label: const Text('Try guardian camera demo'),
+            label: const Text('Camera walk preview'),
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
@@ -1609,7 +1609,7 @@ class _SessionScreenState extends State<SessionScreen>
           if (showDemoControls)
             action(
               Icons.view_in_ar,
-              'Try guardian camera demo',
+              'Camera walk preview',
               () => openGuardianCamera(GuardianAr(session: c, demo: true)),
               subtitle: 'Practice with a virtual walker. No wearer, GPS or missed check-in is required.',
             ),

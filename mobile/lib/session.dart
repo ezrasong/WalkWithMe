@@ -243,7 +243,7 @@ class SessionController extends ChangeNotifier {
     if (enabled) {
       if (!demoMode && snapshot?['sensorMode'] == 'simulated') {
         throw const FormatException(
-          'Enable demo mode before enabling simulated guardian alerts.',
+          'Enable presentation mode before enabling simulated guardian alerts.',
         );
       }
       if (snapshot == null ||
@@ -769,7 +769,8 @@ class SessionController extends ChangeNotifier {
     try {
       await storage.write(key: 'showDemoControls', value: enabled.toString());
     } catch (_) {
-      message = 'Could not save the demo mode preference on this phone.';
+      message =
+          'Could not save the presentation mode preference on this phone.';
     }
     if (!demoMode && guardian && snapshot?['sensorMode'] == 'simulated') {
       try {
