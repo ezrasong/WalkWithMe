@@ -129,7 +129,7 @@ class CameraNavigation extends StatelessWidget {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            '${simulated ? 'DEMO - ' : ''}$mode',
+                                            mode,
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .labelMedium,

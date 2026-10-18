@@ -264,10 +264,10 @@ void main() {
       FlutterSecureStorage.setMockInitialValues({'deviceSetupSeenV1': 'true'});
       await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Hide demo tools'));
-      await tester.tap(find.text('Hide demo tools'));
+      await tester.ensureVisible(find.text('Hide filming tools'));
+      await tester.tap(find.text('Hide filming tools'));
       await tester.pumpAndSettle();
-      expect(find.text('Start shared walking demo'), findsNothing);
+      expect(find.text('Start shared walk'), findsNothing);
       expect(find.text('Local camera animation'), findsNothing);
       expect(
         await const FlutterSecureStorage().read(key: 'showDemoControls'),
@@ -276,12 +276,12 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
       await tester.pumpAndSettle();
-      expect(find.text('Show demo tools'), findsOneWidget);
-      expect(find.text('Start shared walking demo'), findsNothing);
-      await tester.ensureVisible(find.text('Show demo tools'));
-      await tester.tap(find.text('Show demo tools'));
+      expect(find.text('Show filming tools'), findsOneWidget);
+      expect(find.text('Start shared walk'), findsNothing);
+      await tester.ensureVisible(find.text('Show filming tools'));
+      await tester.tap(find.text('Show filming tools'));
       await tester.pumpAndSettle();
-      expect(find.text('Start shared walking demo'), findsOneWidget);
+      expect(find.text('Start shared walk'), findsOneWidget);
       expect(
         await const FlutterSecureStorage().read(key: 'showDemoControls'),
         'true',

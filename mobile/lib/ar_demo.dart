@@ -33,10 +33,10 @@ class ArDemoWalk {
 
   bool get complete => distance >= 18;
   String get button => playing
-      ? 'Pause demo'
+      ? 'Pause walk'
       : complete || distance == 0
-      ? 'Start demo'
-      : 'Resume demo';
+      ? 'Start walk'
+      : 'Resume walk';
   void toggle() {
     if (complete) distance = 0;
     playing = !playing;

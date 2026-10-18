@@ -92,7 +92,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
   Future<void> start() async {
     debugPrint(
       widget.demo
-          ? '[KAZE AR] Opening local AR demo.'
+          ? '[KAZE AR] Opening local camera preview.'
           : '[KAZE AR] Opening guardian spatial AR.',
     );
     try {
@@ -105,7 +105,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
       if (closed || !mounted) return;
       debugPrint(
         widget.demo
-            ? '[KAZE AR] Checking native demo camera support and permission.'
+            ? '[KAZE AR] Checking camera preview support and permission.'
             : '[KAZE AR] Recorded evidence accepted. Checking native support and permissions.',
       );
       final result = await SessionController.native.invokeMethod<String>(
@@ -137,7 +137,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
       if (!closed) {
         close(
           widget.demo
-              ? 'Native AR or camera access unavailable. Close and reopen the demo.'
+              ? 'Camera access unavailable. Close and reopen the preview.'
               : 'Native AR or camera/precise location access unavailable. Use the map.',
         );
       }
@@ -163,7 +163,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
         // Dispose after CameraController finishes notifying its listeners.
         scheduleMicrotask(() {
           if (!closed) {
-            close('Demo camera unavailable. Close and reopen the demo.');
+            close('Camera unavailable. Close and reopen the preview.');
           }
         });
       }
@@ -182,9 +182,9 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
     renderedPoints = demoWalk!.points;
     setState(() {
       prepared = true;
-      status = 'Camera demo ready. Placement is simulated; moving the phone does not move the virtual viewpoint.';
+      status = 'Camera ready. Start the walker when you are ready.';
     });
-    debugPrint('[KAZE AR] Camera demo ready with simulated placement.');
+    debugPrint('[KAZE AR] Camera preview ready.');
   }
 
   Future<void> fetch() async {
@@ -230,7 +230,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
       if (widget.demo ? demoWalk == null : sampled == null) {
         close(
           widget.demo
-              ? 'Camera tracking unavailable. Reopen the demo and point at a well-lit space.'
+              ? 'Camera tracking unavailable. Reopen the preview and point at a well-lit space.'
               : widget.geospatial
               ? 'Google alignment did not obtain precise outdoor tracking. Reopen the camera and choose local alignment or use the map.'
               : 'Precise synchronized outdoor location unavailable. Use the map.',
@@ -249,7 +249,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
           call.arguments is String
               ? call.arguments as String
               : widget.demo
-              ? 'Camera tracking or permission lost. Close and reopen the demo.'
+              ? 'Camera tracking or permission lost. Close and reopen the preview.'
               : 'Camera tracking, permissions or location lost. Use the map.',
         );
         return;
@@ -269,9 +269,9 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
           if (widget.demo && demoWalk == null) {
             demoWalk = ArDemoWalk.fromPose(pose);
             if (demoWalk != null) {
-              debugPrint('[KAZE AR] Demo camera tracking ready.');
+              debugPrint('[KAZE AR] Camera preview tracking ready.');
               startupTimer?.cancel();
-              status = 'Demo ready. Start the virtual wearer, then follow the pink trail where safe.';
+              status = 'Ready. Start the walker, then follow the pink trail.';
             }
           }
           updateCue();
@@ -353,7 +353,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
         await channel?.invokeMethod('render', points);
         if (mounted && !closed) setState(() {});
       } catch (_) {
-        close('Demo renderer unavailable. Close and reopen the demo.');
+        close('Camera overlay unavailable. Close and reopen the preview.');
       } finally {
         demoRendering = false;
       }
@@ -442,7 +442,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
         (prepared || state != AppLifecycleState.inactive)) {
       close(
         widget.demo
-            ? 'Demo camera closed when app lost focus. Reopen the demo.'
+            ? 'Camera closed when the app lost focus. Reopen the preview.'
             : 'Camera closed when app lost focus. Reopen AR from the map.',
       );
     }
@@ -478,7 +478,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
           icon: Icon(
             demoWalk?.playing == true ? Icons.pause : Icons.play_arrow,
           ),
-          label: Text(demoWalk?.button ?? 'Start demo'),
+          label: Text(demoWalk?.button ?? 'Start walk'),
         ),
         TextButton(
           onPressed: demoWalk == null
@@ -487,7 +487,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                   demoWalk!.restart();
                   guidance = CameraTrailGuidance();
                 }),
-          child: const Text('Restart demo'),
+          child: const Text('Restart walk'),
         ),
         for (final speed in [1.0, 2.0])
           ChoiceChip(
@@ -535,7 +535,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
       : Scaffold(
           appBar: AppBar(
             title: Text(
-              widget.demo ? 'WalkWithMe AR demo' : 'Guardian spatial AR',
+              widget.demo ? 'WalkWithMe camera preview' : 'Guardian spatial AR',
             ),
           ),
           body: SafeArea(
@@ -548,7 +548,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                         padding: EdgeInsets.all(12),
                         child: Text(
                           widget.demo
-                              ? 'DEMO: a virtual wearer moves along a pink trail in front of the camera. Point toward a well-lit open space, then start. Positions and heights are simulated; no real person is tracked. Obstacles are not detected. Nothing is sent to your safety session.'
+                              ? 'Follow the walker along the pink camera trail. Point toward a well-lit open space, then start.'
                               : 'Follow the recorded outdoor trail only where safe. Align the camera by walking as instructed. Missing heights use a floating horizontal guide, not the ground or a floor. Walls, stairs and obstacles are not detected. Camera processing stays on this phone.',
                         ),
                       ),
@@ -601,10 +601,10 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                                       padding: const EdgeInsets.all(8),
                                       child: Text(
                                         demoCamera != null
-                                            ? 'DEMO: Simulated placement'
+                                            ? 'Camera placement'
                                             : sharedSimulation
-                                            ? 'DEMO: Shared virtual wearer'
-                                            : 'DEMO: Virtual wearer',
+                                            ? 'Shared walker'
+                                            : 'Walker',
                                         textAlign: TextAlign.center,
                                       ),
                                     ),
@@ -617,7 +617,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                                 bottom: 16,
                                 child: Semantics(
                                   label: widget.demo
-                                      ? 'Demo direction: ${cue!.direction}. Virtual wearer about ${cue!.distance.round()} metres away.'
+                                      ? 'Direction: ${cue!.direction}. Walker about ${cue!.distance.round()} metres away.'
                                       : cue!.message,
                                   child: Material(
                                     color: Theme.of(context)
@@ -673,7 +673,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                             ],
                             if (cue != null && widget.demo)
                               Text(
-                                'Demo direction: ${cue!.direction}; virtual wearer about ${cue!.distance.round()} m away.',
+                                'Direction: ${cue!.direction}; walker about ${cue!.distance.round()} m away.',
                               ),
                             if (registration?.ready == true && cue == null)
                               const Text(
@@ -683,10 +683,10 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                             Text(
                               closed
                                   ? widget.demo
-                                        ? 'No demo positions were saved or shared.'
+                                        ? 'No positions were saved or shared.'
                                         : 'Recorded locations remain on the map.'
                                   : widget.demo
-                                  ? '${demoWalk?.distance.toStringAsFixed(1) ?? '0.0'} / 18 m simulated walk. Pink figure: virtual wearer. ${demoCamera != null ? 'Camera overlay only; placement does not track phone movement.' : 'Trail stays fixed as you move the camera.'} No GPS alignment or walking calibration is needed.'
+                                  ? '${demoWalk?.distance.toStringAsFixed(1) ?? '0.0'} / 18 m walk. Pink figure: walker.'
                                   : '$count recorded breadcrumbs. Cyan: phone. Orange: watch (may be phone-derived). Rings show horizontal uncertainty up to 25 m. Vertical bars appear only with compatible measured heights. Floating guides have no measured height. Gaps are never joined.',
                             ),
                           ],
@@ -698,7 +698,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                       child: FilledButton(
                         onPressed: () => Navigator.of(context).pop(),
                         child: Text(
-                          widget.demo ? 'Close demo' : 'Return to map',
+                          widget.demo ? 'Close preview' : 'Return to map',
                         ),
                       ),
                     ),

@@ -307,7 +307,7 @@ class _DirectionPreviewState extends State<DirectionPreview>
                 liveRegion: true,
                 child: Text(
                   guide != null
-                      ? '${sharedDemo ? 'DEMO. ' : ''}${guide.nearby ? 'Within combined location uncertainty; search nearby, arrival is not verified.' : 'Approximate direction to the last shared point. Turn the camera toward the arrow.'} About ${guide.distance.round()} m, horizontal uncertainty allowance ${guide.uncertainty.round()} m.'
+                      ? '${guide.nearby ? 'Within combined location uncertainty; search nearby, arrival is not verified.' : 'Approximate direction to the last shared point. Turn the camera toward the arrow.'} About ${guide.distance.round()} m, horizontal uncertainty allowance ${guide.uncertainty.round()} m.'
                       : directionCue(
                           authorized: authorized,
                           target:

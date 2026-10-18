@@ -259,7 +259,7 @@ void main() {
       session.snapshot = null;
       await open(tester, demo: true);
       expect(find.byType(CameraPreview), findsOneWidget);
-      expect(find.text('DEMO: Simulated placement'), findsOneWidget);
+      expect(find.text('Camera placement'), findsOneWidget);
       expect(
         find.textContaining('does not track phone movement'),
         findsOneWidget,
@@ -273,8 +273,8 @@ void main() {
           .whereType<CameraTrailOverlay>()
           .single;
       final initial = overlay().points.last['z'] as double;
-      await tester.ensureVisible(find.text('Start demo'));
-      await tester.tap(find.text('Start demo'));
+      await tester.ensureVisible(find.text('Start walk'));
+      await tester.tap(find.text('Start walk'));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -285,7 +285,7 @@ void main() {
       await cameraEvent('error', {'description': 'synthetic camera failure'});
       await tester.pumpAndSettle();
       expect(find.byType(CameraPreview), findsNothing);
-      expect(find.textContaining('Demo camera unavailable'), findsOneWidget);
+      expect(find.textContaining('Camera unavailable'), findsOneWidget);
       expect(cameraCalls, contains('dispose'));
       await close(tester);
     },
@@ -359,7 +359,7 @@ void main() {
             .every((call) => call.arguments['demo'] == true),
         true,
       );
-      expect(find.text('DEMO: Virtual wearer'), findsOneWidget);
+      expect(find.text('Virtual walker'), findsOneWidget);
       expect(renders, isEmpty);
       await event('pose', {
         'x': 0.0,
@@ -371,8 +371,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump();
       final start = renders.last.last['z'] as double;
-      await tester.ensureVisible(find.text('Start demo'));
-      await tester.tap(find.text('Start demo'));
+      await tester.ensureVisible(find.text('Start walk'));
+      await tester.tap(find.text('Start walk'));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
         await tester.pump();
@@ -380,11 +380,11 @@ void main() {
       final moved = renders.last.last['z'] as double;
       expect(moved, lessThan(start));
       expect(renders.last.every((p) => p['source'] == 'demo'), true);
-      await tester.tap(find.text('Pause demo'));
+      await tester.tap(find.text('Pause walk'));
       await tester.pump(const Duration(seconds: 2));
       await tester.pump();
       expect(renders.last.last['z'], moved);
-      await tester.tap(find.text('Restart demo'));
+      await tester.tap(find.text('Restart walk'));
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump();
       expect(renders.last.last['z'] as double, greaterThan(moved));
@@ -395,10 +395,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(calls, contains('stop'));
       expect(find.byType(UiKitView), findsNothing);
-      expect(
-        find.text('No demo positions were saved or shared.'),
-        findsOneWidget,
-      );
+      expect(find.text('No positions were saved or shared.'), findsOneWidget);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await close(tester);
     },

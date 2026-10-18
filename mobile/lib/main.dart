@@ -590,23 +590,22 @@ class _SessionScreenState extends State<SessionScreen>
         TextButton.icon(
           onPressed: () => setDemoControls(!showDemoControls),
           icon: const Icon(Icons.movie_outlined),
-          label: Text(showDemoControls ? 'Hide demo tools' : 'Show demo tools'),
+          label: Text(
+            showDemoControls ? 'Hide filming tools' : 'Show filming tools',
+          ),
         ),
         if (showDemoControls) ...[
           OutlinedButton.icon(
             onPressed: () =>
                 openGuardianCamera(GuardianAr(session: c, demo: true)),
             icon: const Icon(Icons.view_in_ar),
-            label: const Text('Local camera animation'),
+            label: const Text('Camera walk preview'),
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: c.busy ? null : startSharedDemo,
             icon: const Icon(Icons.directions_walk),
-            label: const Text('Start shared walking demo'),
-          ),
-          note(
-            'Demo movement is simulated and shared with your paired guardian. The map and guardian camera use the same route. No real wearer recording starts.',
+            label: const Text('Start shared walk'),
           ),
         ],
       ]),
@@ -720,7 +719,7 @@ class _SessionScreenState extends State<SessionScreen>
             value: consent,
             onChanged: (v) => setState(() => consent = v!),
             title: const Text(
-              'I understand this demo shares session activity with my chosen guardian.',
+              'I understand this session shares activity with my chosen guardian.',
             ),
           ),
           CheckboxListTile.adaptive(
@@ -977,8 +976,6 @@ class _SessionScreenState extends State<SessionScreen>
             : 'Last check-in: ${at(s['lastCheckInAt'])}',
         style: Theme.of(context).textTheme.bodySmall,
       ),
-      if (s['sensorMode'] == 'simulated')
-        note('Simulated readings · not hardware measurements'),
       if (s['relativeMotion']?['available'] == true)
         OutlinedButton(
           onPressed: showSessionDetails,
@@ -987,7 +984,7 @@ class _SessionScreenState extends State<SessionScreen>
       if (showDemoControls && s['demoWalk'] != null)
         OutlinedButton(
           onPressed: showSessionDetails,
-          child: const Text('Demo walk controls & camera'),
+          child: const Text('Walk controls & camera'),
         ),
       if (!c.guardian && phase != 'resolved') ...[
         const SizedBox(height: 12),
@@ -1166,7 +1163,7 @@ class _SessionScreenState extends State<SessionScreen>
         );
         if (p.isMocked || !p.accuracy.isFinite || p.accuracy > 20) {
           throw const FormatException(
-            'Wait outdoors for a precise location to place the shared demo.',
+            'Wait outdoors for a precise location to place the shared walk.',
           );
         }
         route = [
@@ -1179,7 +1176,7 @@ class _SessionScreenState extends State<SessionScreen>
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not start shared demo: $error')),
+          SnackBar(content: Text('Could not start shared walk: $error')),
         );
       }
     }
@@ -1194,11 +1191,8 @@ class _SessionScreenState extends State<SessionScreen>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'DEMO: virtual wearer - ${(walk['distance'] as num).round()} / ${(walk['total'] as num).round()} m',
+          'Walker - ${(walk['distance'] as num).round()} / ${(walk['total'] as num).round()} m',
           style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const Text(
-          'Generated positions, not a real person. This route is shared with the guardian.',
         ),
         if (!c.guardian) ...[
           FilledButton.icon(
@@ -1207,7 +1201,7 @@ class _SessionScreenState extends State<SessionScreen>
             label: const Text('Start 40-second alert take'),
           ),
           const Text(
-            'SIMULATED: restarts the walk at 1x. Check-in is due after 30 seconds; after 10 more seconds without a response, the alert appears and the virtual wearer stops. The guardian can approach that position. Starting another take resets only this demo’s countdown and responses.',
+            'Restarts the walk at 1x. Check-in is due after 30 seconds; after 10 more seconds without a response, the alert appears and the walker stops. The guardian can approach that position. Starting another take resets the countdown and responses.',
           ),
         ],
         if (!c.guardian)
@@ -1380,7 +1374,7 @@ class _SessionScreenState extends State<SessionScreen>
               if (!c.guardian)
                 note(
                   s['sensorMode'] == 'simulated'
-                      ? 'Simulated session. Physical wearer recording is off.'
+                      ? 'Walking session active.'
                       : c.device['status']?.toString() ??
                             'Waiting for recorder status.',
                 ),
@@ -1408,7 +1402,7 @@ class _SessionScreenState extends State<SessionScreen>
       'arrived': 'Guardian reported arrival · not verified',
       'resolve': 'Session ended',
       'revoke-guardian': 'Guardian access revoked',
-      'demo-take': 'Simulated alert take restarted',
+      'demo-take': 'Alert take restarted',
     };
     final activity = c.snapshot?['activity'] as List? ?? [];
     return ListView(
@@ -1529,9 +1523,9 @@ class _SessionScreenState extends State<SessionScreen>
         section('Presentation', [
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Show demo tools'),
+            title: const Text('Show filming tools'),
             subtitle: const Text(
-              'Hide demo launch and playback controls from the welcome screen, map and session details. Filming controls remain here in Settings. Generated positions keep their DEMO labels.',
+              'Show walk launch and playback controls on the welcome screen, map and session details.',
             ),
             value: showDemoControls,
             onChanged: setDemoControls,
@@ -1541,9 +1535,9 @@ class _SessionScreenState extends State<SessionScreen>
           if (showDemoControls)
             action(
               Icons.view_in_ar,
-              'Local camera animation',
+              'Camera walk preview',
               () => openGuardianCamera(GuardianAr(session: c, demo: true)),
-              subtitle: 'A local virtual wearer and camera trail. No GPS or live alert required.',
+              subtitle: 'A camera-guided walking trail.',
             ),
           action(
             Icons.settings_suggest_outlined,
@@ -1565,7 +1559,7 @@ class _SessionScreenState extends State<SessionScreen>
             ),
         ]),
         if (s['sensorMode'] == 'simulated')
-          section('Shared walking demo', [sharedDemoControls()]),
+          section('Shared walk', [sharedDemoControls()]),
         if (c.guardian && phase != 'resolved')
           section('Guardian alerts', [guardianMonitoring()]),
         section('Appearance', [
