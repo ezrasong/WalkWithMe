@@ -153,6 +153,15 @@ void main() {
     expect(calls, ['prepareGuardianAr']);
     expect(viewId, -1);
     expect(find.textContaining('Camera permission denied'), findsWidgets);
+    expect(
+      find.text('Camera permission denied. Use the map.').hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find.text('AR closed. Recorded locations remain on the map.'),
+      findsNothing,
+    );
+    expect(find.textContaining('supported breadcrumbs'), findsNothing);
     await close(tester);
   });
   testWidgets('stale wearer evidence prevents even opening native camera', (
@@ -173,6 +182,40 @@ void main() {
     expect(find.textContaining('compatible vertical reference'), findsWidgets);
     await close(tester);
   });
+  testWidgets(
+    'native failure reason is visible and logged without private evidence',
+    (tester) async {
+      final originalPrint = debugPrint;
+      final diagnostics = <String>[];
+      debugPrint = (String? message, {int? wrapWidth}) {
+        if (message != null) diagnostics.add(message);
+      };
+      try {
+        await open(tester);
+        const reason = 'ARKit camera tracking lost. Reopen AR from the map.';
+        await event('failure', reason);
+        await tester.pumpAndSettle();
+        expect(find.text(reason).hitTestable(), findsOneWidget);
+        expect(calls, contains('stop'));
+        expect(diagnostics.first, '[KAZE AR] Opening guardian spatial AR.');
+        expect(diagnostics.last, '[KAZE AR] Closed: $reason');
+        final log = diagnostics.join('\n');
+        for (final privateValue in [
+          session.access!.token,
+          session.access!.id,
+          session.access!.baseUrl,
+          'synthetic-anchor',
+          'latitude',
+          'longitude',
+        ]) {
+          expect(log, isNot(contains(privateValue)));
+        }
+        await close(tester);
+      } finally {
+        debugPrint = originalPrint;
+      }
+    },
+  );
   testWidgets(
     'access lost during permission request cannot start native tracking',
     (tester) async {
@@ -198,6 +241,7 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      support = 'Camera permission denied. Use the map.';
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
@@ -210,6 +254,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      expect(
+        find.text('Camera permission denied. Use the map.').hitTestable(),
+        findsOneWidget,
+      );
       await tester.ensureVisible(find.text('Return to map'));
       expect(tester.takeException(), isNull);
       await close(tester);

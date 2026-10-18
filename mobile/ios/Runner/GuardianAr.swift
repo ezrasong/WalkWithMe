@@ -100,7 +100,7 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
       }
     }
     backgroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification,
-      object: nil, queue: .main) { [weak self] _ in self?.fail() }
+      object: nil, queue: .main) { [weak self] _ in self?.fail("Camera closed when app lost focus. Reopen AR from the map.") }
   }
 
   func view() -> UIView { scene }
@@ -108,7 +108,7 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
     guard !started, !stopped, ARWorldTrackingConfiguration.isSupported,
       AVCaptureDevice.authorizationStatus(for: .video) == .authorized,
       location.authorizationStatus == .authorizedWhenInUse || location.authorizationStatus == .authorizedAlways,
-      location.accuracyAuthorization == .fullAccuracy else { fail(); return }
+      location.accuracyAuthorization == .fullAccuracy else { fail("ARKit support or camera/precise location permission unavailable. Use the map."); return }
     started = true
     opened = ProcessInfo.processInfo.systemUptime
     let configuration = ARWorldTrackingConfiguration()
@@ -119,7 +119,9 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
     let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
       guard let self = self, self.started else { return }
       let now = ProcessInfo.processInfo.systemUptime
-      if (self.lease == 0 && now - self.opened > 15) || (self.lease > 0 && now - self.lease > 2.5) { self.fail() }
+      if (self.lease == 0 && now - self.opened > 15) || (self.lease > 0 && now - self.lease > 2.5) {
+        self.fail(self.lease == 0 ? "AR startup timed out without usable synchronized location. Use the map." : "AR updates stopped. Reopen AR from the map.")
+      }
     }
     watchdog = timer
     RunLoop.main.add(timer, forMode: .common)
@@ -132,21 +134,30 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
     dots.children.forEach { $0.removeFromParent() }
     scene.isHidden = true
   }
-  private func fail() { stop(); channel.invokeMethod("failure", arguments: nil) }
+  private func fail(_ reason: String) {
+    guard !stopped else { return }
+    stop(); channel.invokeMethod("failure", arguments: reason)
+  }
   func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) { fix = locations.last }
-  func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) { fail() }
+  func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    fail("Guardian location failed (code \((error as NSError).code)). Use the map.")
+  }
   func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
     if started && (manager.accuracyAuthorization != .fullAccuracy ||
-      !(manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse)) { fail() }
+      !(manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse)) { fail("Precise location permission lost. Use the map.") }
   }
-  func session(_ session: ARSession, didFailWithError error: Error) { fail() }
-  func sessionWasInterrupted(_ session: ARSession) { fail() }
+  func session(_ session: ARSession, didFailWithError error: Error) {
+    fail("ARKit session failed (code \((error as NSError).code)). Use the map.")
+  }
+  func sessionWasInterrupted(_ session: ARSession) { fail("ARKit session interrupted. Reopen AR from the map.") }
   func session(_ session: ARSession, didUpdate frame: ARFrame) {
     guard started else { return }
     let uptime = ProcessInfo.processInfo.systemUptime
-    if (lease == 0 && uptime - opened > 15) || (lease > 0 && uptime - lease > 2.5) { fail(); return }
+    if (lease == 0 && uptime - opened > 15) || (lease > 0 && uptime - lease > 2.5) {
+      fail(lease == 0 ? "AR startup timed out without usable synchronized location. Use the map." : "AR updates stopped. Reopen AR from the map."); return
+    }
     guard case .normal = frame.camera.trackingState else {
-      if tracked { fail() }; return
+      if tracked { fail("ARKit camera tracking lost. Reopen AR from the map.") }; return
     }
     tracked = true
     guard let fix = fix, fix.timestamp.timeIntervalSince1970 > lastFix else { return }
@@ -191,7 +202,7 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
       var descriptor = MeshDescriptor(name: "Reported uncertainty")
       descriptor.positions = MeshBuffers.Positions(positions)
       descriptor.primitives = .triangles(indices)
-      guard let ring = try? MeshResource.generate(from: [descriptor]) else { fail(); return }
+      guard let ring = try? MeshResource.generate(from: [descriptor]) else { fail("AR uncertainty geometry could not be rendered. Use the map."); return }
       group.addChild(ModelEntity(mesh: ring, materials: [material]))
       group.addChild(ModelEntity(mesh: .generateBox(size: SIMD3<Float>(0.04, Float(2 * vertical), 0.04)), materials: [material]))
       dots.addChild(group)

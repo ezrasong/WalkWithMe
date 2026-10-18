@@ -48,6 +48,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
   }
 
   Future<void> start() async {
+    debugPrint('[KAZE AR] Opening guardian spatial AR.');
     try {
       if (!authorized) {
         throw StateError(
@@ -56,6 +57,9 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
       }
       await fetch();
       if (closed || !mounted) return;
+      debugPrint(
+        '[KAZE AR] Recorded evidence accepted. Checking native support and permissions.',
+      );
       final result = await SessionController.native.invokeMethod<String>(
         'prepareGuardianAr',
       );
@@ -64,6 +68,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
         close(result ?? 'AR unsupported. Use the map.');
         return;
       }
+      debugPrint('[KAZE AR] Native AR ready. Starting camera tracking.');
       setState(() {
         prepared = true;
         status = 'Move the phone slowly to start camera tracking.';
@@ -143,7 +148,11 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
         return;
       }
       if (call.method == 'failure') {
-        close('Camera tracking, permissions or location lost. Use the map.');
+        close(
+          call.arguments is String
+              ? call.arguments as String
+              : 'Camera tracking, permissions or location lost. Use the map.',
+        );
         return;
       }
       if (call.method != 'sample' || registration == null) return;
@@ -212,6 +221,8 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
 
   void close(String reason) {
     if (closed) return;
+    // Reasons are local status messages, never evidence packets or credentials.
+    debugPrint('[KAZE AR] Closed: $reason');
     closed = true;
     timer?.cancel();
     startupTimer?.cancel();
@@ -254,41 +265,55 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
         builder: (context, constraints) => SingleChildScrollView(
           child: Column(
             children: [
-              const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text(
-                  'Experimental outdoor observations. Walk only where safe. Camera processing stays on this guardian phone. No floor, stair, wall, obstacle or route guidance.',
+              if (!closed)
+                const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text(
+                    'Experimental outdoor observations. Walk only where safe. Camera processing stays on this guardian phone. No floor, stair, wall, obstacle or route guidance.',
+                  ),
                 ),
-              ),
-              SizedBox(
-                height: constraints.maxHeight * .5,
-                child: prepared
-                    ? (Platform.isAndroid
-                          ? AndroidView(
-                              viewType: 'app.kaze/guardian-ar',
-                              onPlatformViewCreated: created,
-                            )
-                          : UiKitView(
-                              viewType: 'app.kaze/guardian-ar',
-                              onPlatformViewCreated: created,
-                            ))
-                    : Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Text(
-                            closed
-                                ? 'AR closed. Recorded locations remain on the map.'
-                                : status,
+              if (!closed)
+                SizedBox(
+                  height: constraints.maxHeight * .5,
+                  child: prepared
+                      ? (Platform.isAndroid
+                            ? AndroidView(
+                                viewType: 'app.kaze/guardian-ar',
+                                onPlatformViewCreated: created,
+                              )
+                            : UiKitView(
+                                viewType: 'app.kaze/guardian-ar',
+                                onPlatformViewCreated: created,
+                              ))
+                      : Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Text(status),
                           ),
                         ),
-                      ),
-              ),
+                ),
               Padding(
                 padding: const EdgeInsets.all(12),
                 child: Semantics(
                   liveRegion: true,
-                  child: Text(
-                    '$status\n$count supported breadcrumbs. Cyan: phone. Orange: watch (may be phone-derived). Rings and bars show uncertainty allowances up to 10 m. Unknown heights and excessive uncertainty are omitted; gaps are never joined.',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (closed) ...[
+                        Text(
+                          'AR closed',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      Text(status),
+                      const SizedBox(height: 8),
+                      Text(
+                        closed
+                            ? 'Recorded locations remain on the map.'
+                            : '$count supported breadcrumbs. Cyan: phone. Orange: watch (may be phone-derived). Rings and bars show uncertainty allowances up to 10 m. Unknown heights and excessive uncertainty are omitted; gaps are never joined.',
+                      ),
+                    ],
                   ),
                 ),
               ),
