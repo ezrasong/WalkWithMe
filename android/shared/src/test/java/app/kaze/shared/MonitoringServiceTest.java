@@ -113,7 +113,7 @@ public class MonitoringServiceTest {
         NotificationChannel channel = manager.getNotificationChannel(MonitoringService.RESPONSE_CHANNEL);
         assertNull(channel.getSound());
         assertTrue(channel.shouldVibrate());
-        assertArrayEquals(new long[]{0, 350, 200, 350, 200, 600}, channel.getVibrationPattern());
+        assertArrayEquals(new long[]{0, 1000, 300, 1000, 300, 1000, 300, 1000, 300, 1000, 300, 1500}, channel.getVibrationPattern());
         // Wear OS's local notification collector reads these compatibility
         // fields even when the Android framework resolves the channel itself.
         var posted = Shadows.shadowOf(manager).getNotification(2);
@@ -138,7 +138,7 @@ public class MonitoringServiceTest {
         responseDue(watch.get());
         assertNotNull(Shadows.shadowOf(manager).getNotification(2));
         assertNull(Shadows.shadowOf(manager).getNotification(2).sound);
-        assertArrayEquals(new long[]{0, 350, 200, 350, 200, 600}, Shadows.shadowOf(manager).getNotification(2).vibrate);
+        assertArrayEquals(new long[]{0, 1000, 300, 1000, 300, 1000, 300, 1000, 300, 1000, 300, 1500}, Shadows.shadowOf(manager).getNotification(2).vibrate);
         watch.destroy();
     }
     @Test public void anotherSessionWatchCannotSuppressThisPhonesReminder() {
@@ -181,6 +181,31 @@ public class MonitoringServiceTest {
         assertNotNull(posted); assertNull(posted.sound); assertNull(posted.vibrate);
         assertFalse(MonitoringService.vibrationRemindersAvailable(context));
         phone.destroy();
+    }
+    @Test public void longerReminderUpgradePreservesExistingVibrationOptOutAndImportance() {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        NotificationChannel previous = new NotificationChannel("check-in-vibration", "Old vibration", NotificationManager.IMPORTANCE_LOW);
+        previous.setSound(null, null); previous.enableVibration(false);
+        manager.createNotificationChannel(previous);
+        var phone = Robolectric.buildService(TestService.class).create();
+        NotificationChannel channel = manager.getNotificationChannel(MonitoringService.RESPONSE_CHANNEL);
+        assertEquals(NotificationManager.IMPORTANCE_LOW, channel.getImportance());
+        assertFalse(channel.shouldVibrate()); assertNull(channel.getSound());
+        responseDue(phone.get());
+        assertNull(Shadows.shadowOf(manager).getNotification(2).vibrate);
+        assertNull(manager.getNotificationChannel("check-in-vibration"));
+        phone.destroy();
+    }
+    @Test public void longerReminderUpgradePreservesBlockedOldChannel() {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        NotificationChannel previous = new NotificationChannel("check-in-vibration", "Old vibration", NotificationManager.IMPORTANCE_NONE);
+        previous.enableVibration(true); manager.createNotificationChannel(previous);
+        var watch = Robolectric.buildService(TestWatchService.class).create();
+        NotificationChannel channel = manager.getNotificationChannel(MonitoringService.RESPONSE_CHANNEL);
+        assertEquals(NotificationManager.IMPORTANCE_NONE, channel.getImportance());
+        responseDue(watch.get());
+        assertNull(Shadows.shadowOf(manager).getNotification(2));
+        watch.destroy();
     }
     @Test public void soundingChannelMigratesToVibrationOnlyWithoutEnablingDisabledVibration() {
         NotificationManager manager = context.getSystemService(NotificationManager.class);

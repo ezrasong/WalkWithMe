@@ -265,10 +265,25 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Hide filming tools'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Hide filming tools'));
       await tester.pumpAndSettle();
       expect(find.text('Start shared walk'), findsNothing);
-      expect(find.text('Local camera animation'), findsNothing);
+      expect(find.text('Camera walk preview'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.textContaining('Indoor tracking is not working'),
+        -150,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView).first,
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(
+        find.textContaining('Indoor tracking is not working'),
+        findsOneWidget,
+      );
       expect(
         await const FlutterSecureStorage().read(key: 'showDemoControls'),
         'false',
@@ -279,6 +294,7 @@ void main() {
       expect(find.text('Show filming tools'), findsOneWidget);
       expect(find.text('Start shared walk'), findsNothing);
       await tester.ensureVisible(find.text('Show filming tools'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Show filming tools'));
       await tester.pumpAndSettle();
       expect(find.text('Start shared walk'), findsOneWidget);

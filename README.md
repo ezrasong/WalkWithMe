@@ -10,7 +10,7 @@ Built with Flutter for Android and iOS, plus a native Wear OS companion. Tested 
 | --- | --- |
 | Safety sessions | Server-confirmed phone/watch check-ins, grace periods, guardian pairing, optional live sharing, revocation and expiry. No emergency dispatch or medical detection. |
 | Pocket motion | Experimental relative movement from Android sensors, with optional watch activity checks. Recording starts anywhere without a manual calibration walk. Room, floor, geographic origin and north remain unknown; walking accuracy is unverified. |
-| Indoor camera | **Pocket motion camera preview** shows a local camera and a separate relative diagram. It cannot align a trail to the floor or navigate between rooms. |
+| Indoor camera | **Camera + motion diagram (no indoor AR)** shows a local camera and a separate relative diagram. It cannot align a trail to the floor or navigate between rooms. |
 | Outdoor camera | Experimental ARKit/ARCore alignment needs accurate outdoor positions and a 30–100 m registration walk. Optional Android Geospatial and approximate GPS/compass preview have separate requirements. Physical accuracy remains unverified. |
 | Filming demo | A labelled simulated wearer follows a shared server-generated route. A repeatable 40-second alert take and hideable presentation controls support filming; DEMO labels stay visible. |
 

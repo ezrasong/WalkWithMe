@@ -1,10 +1,10 @@
-# Guardian spatial AR
+# Outdoor spatial AR (experimental)
 
 The backend prepares recorded geographic evidence for a local guardian renderer. The guardian device owns the camera session. Google-assisted alignment optionally processes guardian sensor data through Google after explicit opt-in. The wearer phone/watch do not record or upload images. The PC performs coordinate geometry and preserves the accuracy limits of the original observations.
 
 ## Indoor limits
 
-Geographic spatial AR is an experimental outdoor mode. The separate **Pocket motion camera preview** shows a local camera and a relative research diagram; it never projects that diagram onto the floor. Starting room, floor, north and the transform into the guardian's camera remain unknown. A freely pocketed wearer phone records no visual landmarks, so merely walking around does not build a visual map that another phone can recognize. IMU/watch observations alone do not provide that shared reference. Universal indoor localization or navigation with only a pocketed phone, without mapping or another usable reference, is not implemented.
+Geographic spatial AR is an experimental outdoor mode. The separate **Camera + motion diagram (no indoor AR)** shows a local camera and a relative research diagram; it never projects that diagram onto the floor. Starting room, floor, north and the transform into the guardian's camera remain unknown. A freely pocketed wearer phone records no visual landmarks, so merely walking around does not build a visual map that another phone can recognize. IMU/watch observations alone do not provide that shared reference. Universal indoor localization or navigation with only a pocketed phone, without mapping or another usable reference, is not implemented.
 
 Relative motion recording needs no doorway, fixed-phone or straight-walking calibration. The outdoor registration walk below serves a different purpose: relating geographic evidence to the guardian camera. Measured waypoint tests in the [motion guide](MOTION_EVALUATION.md#measured-comparison) evaluate accuracy after recording; they are not a required wearer setup step.
 
@@ -68,7 +68,7 @@ All positions and the presentation height are synthetic local metres. The demo n
 
 ## Verification
 
-For device diagnostics, run the updated app from `mobile/` with `flutter run -d DEVICE_ID` on the connected phone's development machine (a Mac for iPhone). Preserve any `--dart-define=KAZE_BASE_URL=...` used for that build. Keep the terminal attached and reopen **Guardian spatial AR**. Lines prefixed `[KAZE AR]` report startup stages and the first closure reason. They omit session credentials, server addresses, geographic observations and camera images. The iPhone renderer forwards specific location, tracking, interruption and timeout failures to that same log; numeric native error codes are included without raw error descriptions. The closure reason also remains visible on the AR screen. These diagnostics require rebuilding and installing the updated app; older builds do not emit them.
+For device diagnostics, run the updated app from `mobile/` with `flutter run -d DEVICE_ID` on the connected phone's development machine (a Mac for iPhone). Preserve any `--dart-define=KAZE_BASE_URL=...` used for that build. Keep the terminal attached and reopen **Outdoor spatial AR (experimental)**. Lines prefixed `[KAZE AR]` report startup stages and the first closure reason. They omit session credentials, server addresses, geographic observations and camera images. The iPhone renderer forwards specific location, tracking, interruption and timeout failures to that same log; numeric native error codes are included without raw error descriptions. The closure reason also remains visible on the AR screen. These diagnostics require rebuilding and installing the updated app; older builds do not emit them.
 
 `npm test` covers geographic geometry, provenance, datum validation/legacy retries, gaps and endpoint authorization/lifecycle. `cd mobile; flutter test` covers registration geometry, uncertainty rejection, privacy and screen lifecycle with simulated native channels. Android APK compilation/lint checks native API integration. These tests do **not** prove real camera alignment.
 

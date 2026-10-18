@@ -2,6 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+const indoorTrackingNotice =
+    'Indoor tracking is not working in this build. Room and floor detection and indoor AR navigation are unavailable.';
+
 /// A relative diagram. It never maps the unknown frame onto geographic tiles
 /// or the guardian camera, and never connects independently restarted origins.
 class RelativeMotionCard extends StatelessWidget {
@@ -33,8 +36,15 @@ class RelativeMotionCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Pocket motion · research preview',
+              'Pocket motion · experimental diagram',
               style: Theme.of(context).textTheme.titleSmall,
+            ),
+            Text(
+              indoorTrackingNotice,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             Text(
               motion?['available'] != true
@@ -74,7 +84,7 @@ class RelativeMotionCard extends StatelessWidget {
                 'Growing drift budget: ${(motion!['driftBudgetMeters'] as num).toStringAsFixed(1)} m · uncalibrated',
               ),
             const Text(
-              'Position, north, room and floor unknown. No camera alignment or indoor directions.',
+              'Experimental relative movement only; walking accuracy is unverified. Position, north, room and floor unknown. No camera alignment or indoor directions.',
             ),
           ],
         ),

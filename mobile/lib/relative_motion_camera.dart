@@ -65,7 +65,7 @@ class _RelativeMotionCameraState extends State<RelativeMotionCamera>
         if (controller.value.hasError) scheduleMicrotask(stop);
       });
       setState(
-        () => message = 'Camera alignment unavailable: starting room, floor and direction are unknown.',
+        () => message = 'No indoor AR trail can be shown. The camera and experimental motion diagram are separate.',
       );
     } catch (_) {
       camera?.dispose().catchError((Object _) {});
@@ -121,11 +121,12 @@ class _RelativeMotionCameraState extends State<RelativeMotionCamera>
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('WalkWithMe pocket motion camera')),
+    appBar: AppBar(title: const Text('Camera + motion diagram')),
     body: SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          const Text(indoorTrackingNotice),
           Text(message),
           if (authorized && camera?.value.isInitialized == true)
             SizedBox(

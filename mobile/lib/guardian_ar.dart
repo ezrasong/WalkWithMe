@@ -182,7 +182,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
     renderedPoints = demoWalk!.points;
     setState(() {
       prepared = true;
-      status = 'Camera ready. Start the walker when you are ready.';
+      status = 'Camera ready. This animation does not track phone movement or locate a real wearer. Start the walker when you are ready.';
     });
     debugPrint('[KAZE AR] Camera preview ready.');
   }
@@ -523,19 +523,19 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
           simulated: sharedSimulation,
           mode: registration?.ready == true
               ? widget.geospatial
-                    ? 'Google-assisted alignment'
-                    : 'Locally aligned AR'
+                    ? 'Outdoor Google-assisted alignment'
+                    : 'Outdoor locally aligned AR'
               : widget.geospatial
               ? 'Looking for outdoor visual features'
               : 'Aligning camera',
           street: targetStreet,
           details:
-              '$status Missing heights use a floating horizontal guide. No ground or obstacle detection.',
+              '$status Outdoor use only; indoor tracking is not working. Missing heights use a floating horizontal guide. No ground or obstacle detection.',
         )
       : Scaffold(
           appBar: AppBar(
             title: Text(
-              widget.demo ? 'WalkWithMe camera preview' : 'Guardian spatial AR',
+              widget.demo ? 'WalkWithMe camera preview' : 'Outdoor spatial AR',
             ),
           ),
           body: SafeArea(
@@ -549,7 +549,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                         child: Text(
                           widget.demo
                               ? 'Follow the walker along the pink camera trail. Point toward a well-lit open space, then start.'
-                              : 'Follow the recorded outdoor trail only where safe. Align the camera by walking as instructed. Missing heights use a floating horizontal guide, not the ground or a floor. Walls, stairs and obstacles are not detected. Camera processing stays on this phone.',
+                              : 'Outdoor use only. Indoor tracking and indoor AR navigation are not working. Align using accurate outdoor locations and the instructed registration walk. Missing heights use a floating horizontal guide. Ground, walls, stairs and obstacles are not detected. Camera processing stays on this phone.',
                         ),
                       ),
                     if (widget.demo && !closed) demoControls(),

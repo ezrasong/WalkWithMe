@@ -565,6 +565,7 @@ class _SessionScreenState extends State<SessionScreen>
         ),
       ),
       const SizedBox(height: 18),
+      card([const Text(indoorTrackingNotice)]),
       Card(
         child: ListTile(
           onTap: openDeviceSetup,
@@ -719,7 +720,7 @@ class _SessionScreenState extends State<SessionScreen>
             value: consent,
             onChanged: (v) => setState(() => consent = v!),
             title: const Text(
-              'I understand this session shares activity with my chosen guardian.',
+              'I agree to phone/watch recording, compressed phone-motion uploads over Wi-Fi or cellular, retained experimental relative motion and owner-only diagnostics, and sharing after nonresponse with my chosen guardian. Indoor tracking and indoor AR navigation are not working. Motion streaming can be stopped in Settings. Data expires after 8 hours.',
             ),
           ),
           CheckboxListTile.adaptive(
@@ -773,6 +774,7 @@ class _SessionScreenState extends State<SessionScreen>
   Widget waiting() => ListView(
     padding: const EdgeInsets.fromLTRB(20, 56, 20, 24),
     children: [
+      card([const Text(indoorTrackingNotice)]),
       Card(
         child: Padding(
           padding: const EdgeInsets.all(26),
@@ -976,10 +978,11 @@ class _SessionScreenState extends State<SessionScreen>
             : 'Last check-in: ${at(s['lastCheckInAt'])}',
         style: Theme.of(context).textTheme.bodySmall,
       ),
+      if (s['sensorMode'] == 'device') note(indoorTrackingNotice),
       if (s['relativeMotion']?['available'] == true)
         OutlinedButton(
           onPressed: showSessionDetails,
-          child: const Text('Pocket motion trail & camera'),
+          child: const Text('Experimental pocket-motion diagram'),
         ),
       if (showDemoControls && s['demoWalk'] != null)
         OutlinedButton(
@@ -1316,7 +1319,7 @@ class _SessionScreenState extends State<SessionScreen>
                     onPressed: () =>
                         openGuardianCamera(RelativeMotionCamera(session: c)),
                     icon: const Icon(Icons.camera_alt_outlined),
-                    label: const Text('Pocket motion camera preview'),
+                    label: const Text('Camera + motion diagram (no indoor AR)'),
                   ),
                 FilledButton(
                   onPressed: c.busy || s['acknowledgedAt'] != null
@@ -1353,14 +1356,16 @@ class _SessionScreenState extends State<SessionScreen>
                   OutlinedButton.icon(
                     onPressed: () => openGuardianCamera(GuardianAr(session: c)),
                     icon: const Icon(Icons.view_in_ar),
-                    label: const Text('Guardian spatial AR'),
+                    label: const Text('Outdoor spatial AR (experimental)'),
                   ),
                 if (p != null)
                   OutlinedButton.icon(
                     onPressed: () =>
                         openGuardianCamera(DirectionPreview(session: c)),
                     icon: const Icon(Icons.camera_alt_outlined),
-                    label: const Text('Camera direction preview'),
+                    label: const Text(
+                      'Outdoor direction preview (approximate)',
+                    ),
                   ),
               ],
               if (showDemoControls && s['demoWalk'] != null)
@@ -1554,8 +1559,7 @@ class _SessionScreenState extends State<SessionScreen>
                   builder: (_) => MotionCapturePage(session: c),
                 ),
               ),
-              subtitle:
-                  'Automatic motion streaming and optional private capture.',
+              subtitle: 'Experimental relative diagram and tuning logs. Indoor tracking is not working.',
             ),
         ]),
         if (s['sensorMode'] == 'simulated')
@@ -1685,9 +1689,7 @@ class _SessionScreenState extends State<SessionScreen>
           const Text(
             'Android guardians can enable background monitoring. iPhone local reminders cannot verify background session status. Apple push needs paid-team signing and server credentials, and still needs physical testing. Calls, SMS and emergency dispatch are not connected.',
           ),
-          note(
-            'Camera direction preview is experimental outdoor guidance. It does not identify rooms, floors or stairs.',
-          ),
+          note(indoorTrackingNotice),
           note(
             'Location comes from device location services. Reported uncertainty remains visible.',
           ),

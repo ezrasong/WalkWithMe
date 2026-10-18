@@ -264,11 +264,8 @@ void main() {
       expect(accepted['acknowledgedAt'], isNotNull);
       expect(accepted['arrivalReportedAt'], isNotNull);
       await readings(s);
-      await tap(tester, find.text('Guardian spatial AR'));
-      await waitFor(
-        tester,
-        find.text('Guardian camera guide'),
-      );
+      await tap(tester, find.text('Outdoor spatial AR (experimental)'));
+      await waitFor(tester, find.text('Outdoor direction preview'));
       await capture(tester, '04-ar-simulator-fallback');
       expect(find.byType(SnackBar), findsNothing);
       expect(find.text('Return to map').hitTestable(), findsOneWidget);

@@ -188,6 +188,8 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          const Text(indoorTrackingNotice),
+          const SizedBox(height: 12),
           const Text(
             'Motion streaming starts automatically with each wearer session over Wi-Fi or cellular. No raw capture is saved by default. No camera is used.',
           ),
@@ -195,7 +197,7 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
           SwitchListTile(
             title: const Text('Retain and share relative research trail'),
             subtitle: const Text(
-              'Keep up to 4096 derived points until session expiry. Share under this session’s guardian access rules. Unknown room, floor and alignment remain unknown. Turning off deletes the retained relative trail; raw uploads remain transient.',
+              'Keep up to 4096 experimental relative points until session expiry. Walking accuracy is unverified; these points cannot locate a room or floor or align an indoor camera. Share under this session’s guardian access rules. Turning off deletes the retained relative trail; raw uploads remain transient.',
             ),
             value: widget.session.snapshot?['motionSharingConsent'] == true,
             onChanged: authorized && !busy ? consent : null,

@@ -308,7 +308,7 @@ void main() {
     });
     await open(tester, demo: true);
     expect(find.byType(CameraPreview), findsNothing);
-    expect(find.textContaining('camera access unavailable'), findsOneWidget);
+    expect(find.textContaining('Camera access unavailable'), findsOneWidget);
     expect(requests, 0);
     await close(tester);
   });
@@ -359,7 +359,7 @@ void main() {
             .every((call) => call.arguments['demo'] == true),
         true,
       );
-      expect(find.text('Virtual walker'), findsOneWidget);
+      expect(find.text('Walker'), findsOneWidget);
       expect(renders, isEmpty);
       await event('pose', {
         'x': 0.0,

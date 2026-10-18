@@ -13,7 +13,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public abstract class MonitoringService extends Service implements SensorRecorder.Sink {
-    static final String RESPONSE_CHANNEL = "check-in-vibration";
+    static final String RESPONSE_CHANNEL = "check-in-vibration-v2";
     public static final String RESPOND = "app.kaze.RESPOND", END = "app.kaze.END", EVENT = "app.kaze.EVENT", REFRESH = "app.kaze.REFRESH";
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
     private SensorRecorder recorder;
@@ -58,17 +58,20 @@ public abstract class MonitoringService extends Service implements SensorRecorde
         NotificationManager manager = getSystemService(NotificationManager.class);
         manager.createNotificationChannel(new NotificationChannel("recording", "Active safety session", NotificationManager.IMPORTANCE_LOW));
         if (manager.getNotificationChannel(RESPONSE_CHANNEL) == null) {
-            // Sound is immutable after creation. Migrate to vibration only,
-            // retaining blocked importance and an existing vibration opt-out.
-            NotificationChannel previous = manager.getNotificationChannel("check-in-reminders");
-            boolean vibration = previous == null || previous.shouldVibrate();
+            // Channel vibration patterns are immutable after creation. Upgrade
+            // both collectors while retaining blocked importance and vibration opt-out.
+            NotificationChannel previous = manager.getNotificationChannel("check-in-vibration");
+            if (previous == null) previous = manager.getNotificationChannel("check-in-reminders");
             if (previous == null) previous = manager.getNotificationChannel("response");
+            boolean vibration = previous == null || previous.shouldVibrate();
             NotificationChannel response = new NotificationChannel(RESPONSE_CHANNEL, "Check-in response due",
                 previous == null ? NotificationManager.IMPORTANCE_HIGH : previous.getImportance());
             response.setSound(null, new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build());
-            response.setVibrationPattern(new long[]{0, 350, 200, 350, 200, 600});
+            // Six pulses over eight seconds, once per deadline; no repeating alarm.
+            response.setVibrationPattern(new long[]{0, 1000, 300, 1000, 300, 1000, 300, 1000, 300, 1000, 300, 1500});
             response.enableVibration(vibration);
             manager.createNotificationChannel(response);
+            manager.deleteNotificationChannel("check-in-vibration");
             manager.deleteNotificationChannel("check-in-reminders");
             manager.deleteNotificationChannel("response");
         }

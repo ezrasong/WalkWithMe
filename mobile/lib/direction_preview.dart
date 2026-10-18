@@ -276,21 +276,21 @@ class _DirectionPreviewState extends State<DirectionPreview>
         nearby: guide?.nearby ?? false,
         street: guide?.street,
         simulated: sharedDemo,
-        mode: 'Approximate GPS + compass',
+        mode: 'Outdoor only · approximate GPS + compass',
         details: guide == null
             ? 'Waiting for fresh precise locations and compass. Move outdoors, hold the phone upright and calibrate the compass. Guidance stays hidden until readings are usable.'
             : 'Next recorded point. Location uncertainty allowance ${guide.uncertainty.round()} m. No ground or obstacle detection; arrival is not verified.',
       );
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Guardian camera guide')),
+      appBar: AppBar(title: const Text('Outdoor direction preview')),
       body: SafeArea(
         child: Column(
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'GPS + compass camera guide. Trail placement and height are approximate, not anchored to the room or ground. Keep the phone upright. Check the map and real surroundings; obstacles and floors are not detected.',
+                'Outdoor GPS + compass preview only. Indoor tracking is not working. Placement and height are approximate; no room, floor, ground or obstacle detection. Keep the phone upright and check the map and real surroundings.',
               ),
             ),
             Expanded(
