@@ -58,4 +58,4 @@ Experimental [guardian spatial AR](docs/AR_BACKEND.md) uses native ARKit/Reality
 
 Owner-only tuning diagnostics retain at most 120 batch summaries with consent. Copy them from **Settings → Motion trail evaluation → Copy motion diagnostics** before ending a house test. They report sampling, gaps, model timing, stationary decisions and watch checks, excluding raw samples, coordinates and credentials. They do not train the model or prove accuracy. Relative history is bounded to 4096 points/128 sections; consent withdrawal, expiry and deletion clear the relevant retained records. The motion checkpoint is subject to separate non-commercial research terms; see the motion guide for provenance and licensing.
 
-See [filming and indoor test instructions](docs/DEMO_FILMING.md), [iPhone build instructions](docs/FLUTTER_MOBILE.md#iphone) and the [Devpost project story](docs/DEVPOST.md).
+See [iPhone build instructions](docs/FLUTTER_MOBILE.md#iphone) and the [Devpost project story](docs/DEVPOST.md).
