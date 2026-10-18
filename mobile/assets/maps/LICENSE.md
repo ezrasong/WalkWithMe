@@ -130,4 +130,4 @@ The project contributors grant MapTiler AG the license to give such
 exceptions on a commercial basis.
 
 
-KAZE adapts OpenFreeMap Dark (https://tiles.openfreemap.org/styles/dark). Changes: brighter labels and roads, darker label halos, and contrasting building outlines. Map data, fonts and sprites remain hosted by OpenFreeMap.
+WalkWithMe adapts OpenFreeMap Dark (https://tiles.openfreemap.org/styles/dark). Changes: brighter labels and roads, darker label halos, and contrasting building outlines. Map data, fonts and sprites remain hosted by OpenFreeMap.

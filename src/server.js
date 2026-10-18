@@ -293,5 +293,5 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   mkdirSync(path.join(root, 'data'), { recursive: true });
   const { server } = createApp({ dbPath: process.env.KAZE_DB ?? path.join(root, 'data/kaze.sqlite'), applePush: applePushFromEnv() });
-  server.listen(Number(process.env.PORT ?? 4173), process.env.HOST ?? '127.0.0.1', () => console.log(`KAZE simulation: http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? 4173}`));
+  server.listen(Number(process.env.PORT ?? 4173), process.env.HOST ?? '127.0.0.1', () => console.log(`WalkWithMe service: http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? 4173}`));
 }

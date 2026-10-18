@@ -1,10 +1,10 @@
-# KAZE guardian pairing
+# WalkWithMe guardian pairing
 
 On the wearer's Android phone, start a session, then open **Settings → Show guardian QR code**. On the guardian's iPhone or Android, choose **Scan QR code** under **Join as guardian**. If the camera is unavailable, enter the displayed 10-character pairing code instead. No link needs to be copied or pasted. Pairing does not enable live sharing, acknowledge an alert or extend a check-in deadline.
 
 Codes expire after five minutes or when the session expires, whichever comes first. Each code can be redeemed once. Generating a new code replaces the previous code for that session. Ending/deleting the session or revoking guardian access invalidates outstanding codes. Existing guardian access remains valid when generating or redeeming a code; revocation still removes all access for that guardian credential. The current app supports one saved session per phone.
 
-Both phones must run the updated app against the same HTTPS service, and the backend must also be updated. The QR payload contains the KAZE format/version, service origin and temporary pairing code, without owner/watch/guardian bearer credentials or geographic evidence. Scanning never follows a URL or changes the configured service. Camera processing stays local and images are not returned, recorded or uploaded. Camera permission is requested only when opening the scanner. Denied permission has a manual-code fallback. The scanner suspends the camera on lost focus and closes it after a successful scan or leaving the screen. A phone with active wearer recording cannot open the guardian scanner.
+Both phones must run the updated app against the same HTTPS service, and the backend must also be updated. The QR payload contains the WalkWithMe format/version, service origin and temporary pairing code, without owner/watch/guardian bearer credentials or geographic evidence. Scanning never follows a URL or changes the configured service. Camera processing stays local and images are not returned, recorded or uploaded. Camera permission is requested only when opening the scanner. Denied permission has a manual-code fallback. The scanner suspends the camera on lost focus and closes it after a successful scan or leaving the screen. A phone with active wearer recording cannot open the guardian scanner.
 
 ## Service behavior
 

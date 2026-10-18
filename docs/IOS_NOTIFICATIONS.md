@@ -1,12 +1,12 @@
-# KAZE iPhone guardian notifications
+# WalkWithMe iPhone guardian notifications
 
 ## Free Apple Account: local review reminders
 
 Use a Mac with Xcode and sign the Runner target with your Personal Team, as described in [iPhone setup](FLUTTER_MOBILE.md#iphone). A signed development build means Apple development credentials authorize installation on a physical iPhone; it does not mean an App Store release. Free-account provisioning generally expires after seven days, requiring another Xcode install. Local notifications do not require paid membership.
 
-Join a guardian session and explicitly enable **Guardian notifications**. Allow notifications when iOS asks. KAZE schedules one local reminder at the last server-confirmed deadline plus grace, using the server-relative remaining time. It contains no wearer name, location or private link. Its text asks you to open KAZE and says that background status has not been verified.
+Join a guardian session and explicitly enable **Guardian notifications**. Allow notifications when iOS asks. WalkWithMe schedules one local reminder at the last server-confirmed deadline plus grace, using the server-relative remaining time. It contains no wearer name, location or private link. Its text asks you to open WalkWithMe and says that background status has not been verified.
 
-A reminder can still appear after the wearer checks in, resolves the session or revokes access while the guardian app is closed. It is not a confirmed safety alert. Reopening KAZE refreshes the deadline or removes the reminder on acknowledgment, resolution, deletion, expiry or revoked access. Removing the link or disabling notifications cancels the local reminder. iOS Focus, notification settings and operating-system delivery behavior can suppress notifications. No critical-alert entitlement is requested.
+A reminder can still appear after the wearer checks in, resolves the session or revokes access while the guardian app is closed. It is not a confirmed safety alert. Reopening WalkWithMe refreshes the deadline or removes the reminder on acknowledgment, resolution, deletion, expiry or revoked access. Removing the link or disabling notifications cancels the local reminder. iOS Focus, notification settings and operating-system delivery behavior can suppress notifications. No critical-alert entitlement is requested.
 
 ## Paid Apple Developer membership: optional server-confirmed push
 
@@ -26,13 +26,13 @@ The native registration and backend Apple Push Notification service (APNs) path 
 
 For TestFlight or App Store builds, both the app entitlement/build setting and server environment must be `production`. Incomplete server configuration fails startup; an unconfigured server rejects enrollment rather than pretending push is active. Keep key files, SQLite data and backup copies private; device tokens are stored in the server's private SQLite database until removal or session expiry. `.p8` files are ignored by Git.
 
-4. Install the signed build, join a guardian session and explicitly enable notifications. KAZE asks Apple for a device token, registers it with guardian-only authorization, and reports Apple push registered only after server enrollment succeeds. A failed enrollment retains the local reminder. On success, the local reminder is canceled to avoid duplicate notifications. After an app update, signing/environment change or Apple registration failure, turn notifications off and on while connected to refresh enrollment.
+4. Install the signed build, join a guardian session and explicitly enable notifications. WalkWithMe asks Apple for a device token, registers it with guardian-only authorization, and reports Apple push registered only after server enrollment succeeds. A failed enrollment retains the local reminder. On success, the local reminder is canceled to avoid duplicate notifications. After an app update, signing/environment change or Apple registration failure, turn notifications off and on while connected to refresh enrollment.
 
 The server advances deadlines independently of the wearer connection. It sends only for an active, unacknowledged alert, using a generic payload without names, locations or access credentials. A push never marks the guardian as connected, as having opened the alert or as having acknowledged it. Accepted APNs submissions are persisted to avoid repeats across backend restarts. Temporary failures retry after 30 seconds; invalid device tokens are removed. At most five devices can enroll per session.
 
-APNs acceptance is not proof of delivery or a human response. Pushes are sent with expiry zero so Apple does not queue them for later offline delivery. This deliberately limits stale alerts and can lose notifications to offline devices. Already submitted notifications cannot reliably be retracted after acknowledgment or access revocation; always open KAZE to confirm current state. No delivery guarantee is made.
+APNs acceptance is not proof of delivery or a human response. Pushes are sent with expiry zero so Apple does not queue them for later offline delivery. This deliberately limits stale alerts and can lose notifications to offline devices. Already submitted notifications cannot reliably be retracted after acknowledgment or access revocation; always open WalkWithMe to confirm current state. No delivery guarantee is made.
 
-Disabling notifications stops local reminders and requests remote deregistration. If that request fails, KAZE retains session access and enrollment metadata so removal can be retried. Revocation, deletion, resolution and expiry remove server registrations. If local app data is lost before deregistration, the old enrollment lasts until the session ends or expires. The backend and its network must remain available.
+Disabling notifications stops local reminders and requests remote deregistration. If that request fails, WalkWithMe retains session access and enrollment metadata so removal can be retried. Revocation, deletion, resolution and expiry remove server registrations. If local app data is lost before deregistration, the old enrollment lasts until the session ends or expires. The backend and its network must remain available.
 
 ## Verification still needed on the Mac and iPhone
 

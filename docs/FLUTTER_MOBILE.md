@@ -24,11 +24,11 @@ adb -s PHONE_SERIAL install -r mobile/build/app/outputs/flutter-apk/app-debug.ap
 adb -s WATCH_ADDRESS install -r android/watch/build/outputs/apk/debug/watch-debug.apk
 ```
 
-Pair the watch with the phone using its companion app. Start a session in KAZE on the phone, then open KAZE on the watch. It joins automatically. Approve first-use permissions when prompted.
+Pair the watch with the phone using its companion app. Start a session in WalkWithMe on the phone, then open WalkWithMe on the watch. It joins automatically. Approve first-use permissions when prompted.
 
-The watch relays through the phone over Bluetooth. Watch Wi-Fi is optional when the paired phone can reach the backend. Reopen KAZE to resume after a force-stop; reopening does not reset the check-in deadline.
+The watch relays through the phone over Bluetooth. Watch Wi-Fi is optional when the paired phone can reach the backend. Reopen WalkWithMe to resume after a force-stop; reopening does not reset the check-in deadline.
 
-An active session publishes a Wear OS Ongoing Activity to keep KAZE available when waking the watch and provide a watch-face return shortcut. Manually opening another app or the watch face remains under the user's control. This does not keep the display at full brightness or disable power management. See [Wear OS ongoing activities](https://developer.android.com/training/wearables/notifications/ongoing-activity).
+An active session publishes a Wear OS Ongoing Activity to keep WalkWithMe available when waking the watch and provide a watch-face return shortcut. Manually opening another app or the watch face remains under the user's control. This does not keep the display at full brightness or disable power management. See [Wear OS ongoing activities](https://developer.android.com/training/wearables/notifications/ongoing-activity).
 
 ## iPhone
 
@@ -57,8 +57,8 @@ reachable HTTPS service address. Guardian invitations must match the service
 compiled into the app. For a physical iPhone build:
 
 ```sh
-git clone https://github.com/ezrasong/htv11.git
-cd htv11/mobile
+git clone https://github.com/ezrasong/WalkWithMe.git
+cd WalkWithMe/mobile
 flutter pub get
 flutter build ios --debug --no-codesign --dart-define=KAZE_BASE_URL=https://your-service.example
 open ios/Runner.xcworkspace
@@ -132,15 +132,17 @@ On the tested Vivo, background access is under App info → Battery usage → Ba
 
 Install updates over the existing app using the same signing key. Do not uninstall or clear app data if you want to retain settings.
 
+The public name and blue heart icon are WalkWithMe. Existing `app.kaze.*` application identifiers, the QR protocol marker, `KAZE_*` build settings and `[KAZE AR]` diagnostic prefix remain compatible with earlier installs and service configuration. Android phone and watch launcher icons now use the same heart artwork as Flutter and iOS.
+
 ## Sessions
 
 Choose timing and start a session on the wearer's phone. The HTTPS service address is built into the app and inherited automatically by the watch. Choose **Settings → Show guardian QR code**. On the guardian's phone choose **Scan QR code**, or enter the displayed pairing code. Each code works once for five minutes; generating a new one replaces the previous code. QR invitations for another server are rejected before sending credentials. Both app builds and the backend need the pairing update. Trails are shared after nonresponse unless live sharing was enabled separately. See [pairing behavior and limits](GUARDIAN_PAIRING.md).
 
-On an Android guardian, opt into **Background guardian alerts** on the session screen or in Settings. The native monitor uses a persistent notification and checks the server every five seconds after the previous request completes. It requires notifications, network access and background battery use; it does not request guardian location or motion permissions. Alerts contain no wearer name, location or private link. Open KAZE to view evidence or explicitly acknowledge. Stopping monitoring does not acknowledge or resolve the wearer's alert. Removing the guardian link also stops monitoring and removes its saved access. Expiry, revocation, deletion and session resolution stop monitoring after confirmation; known expiry is enforced locally during network loss. A stale response cannot restore a removed link. After force-stop or a phone reboot, reopen KAZE and enable monitoring again.
+On an Android guardian, opt into **Background guardian alerts** on the session screen or in Settings. The native monitor uses a persistent notification and checks the server every five seconds after the previous request completes. It requires notifications, network access and background battery use; it does not request guardian location or motion permissions. Alerts contain no wearer name, location or private link. Open WalkWithMe to view evidence or explicitly acknowledge. Stopping monitoring does not acknowledge or resolve the wearer's alert. Removing the guardian link also stops monitoring and removes its saved access. Expiry, revocation, deletion and session resolution stop monitoring after confirmation; known expiry is enforced locally during network loss. A stale response cannot restore a removed link. After force-stop or a phone reboot, reopen WalkWithMe and enable monitoring again.
 
 The background monitor reads only session status. Its polling never counts as a human opening or acknowledging the request. Network errors produce a separate connection warning, not a safety alert. Notification settings, Do Not Disturb and manufacturer battery controls still apply. Physical background delivery needs a dedicated guardian-device check before relying on it.
 
-On iPhone, enable **Guardian notifications** for a local review reminder at the last known check-in deadline plus grace. It says to reopen KAZE to verify status; it cannot establish nonresponse while the app is closed and may be stale after a wearer check-in, revocation or session change. Confirmed foreground updates refresh or cancel the reminder. No background location, continuous polling or silent-push workaround is used. Optional remote Apple push is implemented but disabled until paid-team signing and server credentials are configured; see [Apple notification setup](IOS_NOTIFICATIONS.md). The new Swift notification code still needs an Xcode build and physical iPhone validation. Calls, SMS, backup-contact escalation and emergency dispatch are not connected on either platform. Check-ins require server confirmation. An acknowledgment does not end the session.
+On iPhone, enable **Guardian notifications** for a local review reminder at the last known check-in deadline plus grace. It says to reopen WalkWithMe to verify status; it cannot establish nonresponse while the app is closed and may be stale after a wearer check-in, revocation or session change. Confirmed foreground updates refresh or cancel the reminder. No background location, continuous polling or silent-push workaround is used. Optional remote Apple push is implemented but disabled until paid-team signing and server credentials are configured; see [Apple notification setup](IOS_NOTIFICATIONS.md). The new Swift notification code still needs an Xcode build and physical iPhone validation. Calls, SMS, backup-contact escalation and emergency dispatch are not connected on either platform. Check-ins require server confirmation. An acknowledgment does not end the session.
 
 See [network setup](PC_BACKEND.md) for remote access.
 
