@@ -38,7 +38,7 @@ class KazeApp extends StatefulWidget {
 }
 
 class _KazeAppState extends State<KazeApp> {
-  ThemeMode appearance = ThemeMode.system;
+  ThemeMode appearance = ThemeMode.dark;
   final storage = const FlutterSecureStorage();
   @override
   void initState() {
@@ -48,15 +48,14 @@ class _KazeAppState extends State<KazeApp> {
         .then((value) {
           if (mounted) {
             setState(
-              () => appearance = ThemeMode.values.firstWhere(
-                (mode) => mode.name == value,
-                orElse: () => ThemeMode.system,
-              ),
+              () => appearance = value == ThemeMode.light.name
+                  ? ThemeMode.light
+                  : ThemeMode.dark,
             );
           }
         })
         .catchError((Object _) {
-          /* Use system appearance if storage is unavailable. */
+          /* Keep the default dark appearance if storage is unavailable. */
         });
   }
 
@@ -113,29 +112,26 @@ ThemeData kazeTheme(Brightness brightness) {
     scaffoldBackgroundColor: dark
         ? const Color(0xff080a0e)
         : const Color(0xffeef1f5),
+    fontFamily: 'Roboto',
     textTheme: const TextTheme(
       displaySmall: TextStyle(
-        fontSize: 40,
-        fontWeight: FontWeight.w800,
-        height: 1.02,
-        letterSpacing: -1.5,
+        fontSize: 36,
+        fontWeight: FontWeight.w700,
+        height: 1.08,
+        letterSpacing: -.4,
       ),
       headlineSmall: TextStyle(
-        fontSize: 30,
-        fontWeight: FontWeight.w800,
-        height: 1.1,
-        letterSpacing: -.8,
-      ),
-      titleLarge: TextStyle(
-        fontSize: 22,
+        fontSize: 28,
         fontWeight: FontWeight.w700,
-        letterSpacing: -.25,
+        height: 1.15,
+        letterSpacing: -.2,
       ),
-      titleMedium: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-      bodyLarge: TextStyle(fontSize: 17, height: 1.4),
-      bodyMedium: TextStyle(fontSize: 16, height: 1.4),
-      bodySmall: TextStyle(fontSize: 14, height: 1.4),
-      labelLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      titleLarge: TextStyle(fontSize: 21, fontWeight: FontWeight.w600),
+      titleMedium: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+      bodyLarge: TextStyle(fontSize: 17, height: 1.5),
+      bodyMedium: TextStyle(fontSize: 16, height: 1.5),
+      bodySmall: TextStyle(fontSize: 14, height: 1.5),
+      labelLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: Colors.transparent,
@@ -148,7 +144,7 @@ ThemeData kazeTheme(Brightness brightness) {
       titleTextStyle: TextStyle(
         color: colors.onSurface,
         fontSize: 22,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
       ),
     ),
     cardTheme: CardThemeData(
@@ -156,9 +152,9 @@ ThemeData kazeTheme(Brightness brightness) {
           ? const Color(0xff111720).withValues(alpha: .92)
           : Colors.white.withValues(alpha: .94),
       elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 10),
+      margin: const EdgeInsets.symmetric(vertical: 14),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         side: BorderSide(color: colors.outline.withValues(alpha: .55)),
       ),
     ),
@@ -167,15 +163,15 @@ ThemeData kazeTheme(Brightness brightness) {
       fillColor: colors.surfaceContainerLow,
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: colors.outline.withValues(alpha: .55)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: colors.outline.withValues(alpha: .55)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: colors.primary, width: 1.6),
       ),
     ),
@@ -184,14 +180,14 @@ ThemeData kazeTheme(Brightness brightness) {
         minimumSize: const Size.fromHeight(52),
         textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size.fromHeight(48),
         side: BorderSide(color: colors.outline),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
@@ -218,7 +214,7 @@ ThemeData kazeTheme(Brightness brightness) {
       thickness: 1,
     ),
     listTileTheme: const ListTileThemeData(
-      minVerticalPadding: 12,
+      minVerticalPadding: 16,
       contentPadding: EdgeInsets.symmetric(horizontal: 4),
     ),
     chipTheme: ChipThemeData(
@@ -234,25 +230,17 @@ class _BrandTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: colors.primary,
-            borderRadius: BorderRadius.circular(11),
-            boxShadow: [
-              BoxShadow(
-                color: colors.primary.withValues(alpha: .28),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
+        ClipRRect(
+          borderRadius: BorderRadius.circular(9),
+          child: Image.asset(
+            'assets/branding/walkwithme_logo.png',
+            width: 34,
+            height: 34,
+            fit: BoxFit.cover,
           ),
-          child: const Icon(Icons.route_rounded, color: Colors.white, size: 19),
         ),
         const SizedBox(width: 11),
         Flexible(
@@ -260,7 +248,7 @@ class _BrandTitle extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
       ],
@@ -273,7 +261,7 @@ class SessionScreen extends StatefulWidget {
   final ValueChanged<ThemeMode>? onAppearanceChanged;
   const SessionScreen({
     super.key,
-    this.appearance = ThemeMode.system,
+    this.appearance = ThemeMode.dark,
     this.onAppearanceChanged,
   });
   @override
@@ -389,7 +377,7 @@ class _SessionScreenState extends State<SessionScreen>
   );
   Widget card(List<Widget> children) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
@@ -403,10 +391,23 @@ class _SessionScreenState extends State<SessionScreen>
     final title = c.access == null
         ? 'WalkWithMe'
         : ['Session', 'Activity', 'Settings'][tab];
+    final useDarkTheme =
+        widget.appearance == ThemeMode.dark ||
+        (widget.appearance == ThemeMode.system && dark);
+    final themeToggle = IconButton(
+      tooltip: useDarkTheme ? 'Use light theme' : 'Use dark theme',
+      onPressed: () => widget.onAppearanceChanged?.call(
+        useDarkTheme ? ThemeMode.light : ThemeMode.dark,
+      ),
+      icon: Icon(
+        useDarkTheme ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+      ),
+    );
     return Scaffold(
       appBar: Platform.isIOS
           ? CupertinoNavigationBar(
               middle: _BrandTitle(title),
+              trailing: themeToggle,
               backgroundColor: colors.surface.withValues(alpha: .9),
               border: Border(
                 bottom: BorderSide(
@@ -414,17 +415,9 @@ class _SessionScreenState extends State<SessionScreen>
                 ),
               ),
             )
-          : AppBar(title: _BrandTitle(title)),
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: dark
-                ? const [Color(0xff0c1320), Color(0xff080a0e)]
-                : const [Color(0xffe9effa), Color(0xfff5f6f8)],
-          ),
-        ),
+          : AppBar(title: _BrandTitle(title), actions: [themeToggle]),
+      body: ColoredBox(
+        color: Theme.of(context).scaffoldBackgroundColor,
         child: SafeArea(
           child: Column(
             children: [
@@ -503,37 +496,30 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   Widget onboarding() => ListView(
-    padding: const EdgeInsets.fromLTRB(18, 10, 18, 32),
+    padding: const EdgeInsets.fromLTRB(22, 16, 22, 40),
     children: [
       Container(
-        padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
+        padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xff173d86), Color(0xff0a1d43)],
-          ),
-          borderRadius: BorderRadius.circular(30),
+          color: const Color(0xff102d62),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: const Color(0xff4f7cff).withValues(alpha: .5),
           ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x381746a2),
-              blurRadius: 30,
-              offset: Offset(0, 16),
-            ),
-          ],
         ),
         child: Stack(
           children: [
-            const Positioned(
-              right: -18,
-              top: -24,
-              child: Icon(
-                Icons.route_rounded,
-                size: 128,
-                color: Color(0x1fffffff),
+            Positioned(
+              right: 0,
+              top: 0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.asset(
+                  'assets/branding/walkwithme_logo.png',
+                  width: 64,
+                  height: 64,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
             Column(
@@ -546,7 +532,7 @@ class _SessionScreenState extends State<SessionScreen>
                   ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: .12),
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0x33ffffff)),
                   ),
                   child: const Text(
@@ -558,11 +544,11 @@ class _SessionScreenState extends State<SessionScreen>
                     ),
                   ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 28),
                 Text(
                   'Move with confidence.',
                   style: Theme.of(context).textTheme.displaySmall
-                      ?.copyWith(color: Colors.white, fontSize: 38),
+                      ?.copyWith(color: Colors.white, fontSize: 36),
                 ),
                 const SizedBox(height: 12),
                 const Text(
@@ -578,7 +564,7 @@ class _SessionScreenState extends State<SessionScreen>
           ],
         ),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 18),
       Card(
         child: ListTile(
           onTap: openDeviceSetup,
@@ -588,7 +574,7 @@ class _SessionScreenState extends State<SessionScreen>
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.primary
                   .withValues(alpha: .15),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               Icons.settings_suggest_outlined,
@@ -613,7 +599,7 @@ class _SessionScreenState extends State<SessionScreen>
             icon: const Icon(Icons.view_in_ar),
             label: const Text('Local camera animation'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: c.busy ? null : startSharedDemo,
             icon: const Icon(Icons.directions_walk),
@@ -623,9 +609,8 @@ class _SessionScreenState extends State<SessionScreen>
             'Demo movement is simulated and shared with your paired guardian. The map and guardian camera use the same route. No real wearer recording starts.',
           ),
         ],
-        if (Platform.isAndroid) arPrivacyNotice(),
       ]),
-      const SizedBox(height: 18),
+      const SizedBox(height: 22),
       if (Platform.isAndroid)
         Container(
           padding: const EdgeInsets.all(4),
@@ -735,7 +720,7 @@ class _SessionScreenState extends State<SessionScreen>
             value: consent,
             onChanged: (v) => setState(() => consent = v!),
             title: const Text(
-              'I agree to record this session on my phone and paired watch, send compressed phone motion over Wi-Fi or cellular for research trail estimates, retain a bounded relative trail and owner-only motion diagnostics, and share the trail after nonresponse with my chosen guardian. Room, floor and camera alignment can remain unknown. Motion streaming can be stopped in Settings. Data expires after 8 hours.',
+              'I understand this demo shares session activity with my chosen guardian.',
             ),
           ),
           CheckboxListTile.adaptive(
@@ -1113,22 +1098,6 @@ class _SessionScreenState extends State<SessionScreen>
     );
   }
 
-  Widget arPrivacyNotice() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        'Camera AR runs on Google Play Services for AR (ARCore), provided by Google and governed by the Google Privacy Policy.',
-      ),
-      TextButton(
-        onPressed: () => launchUrl(
-          Uri.parse('https://policies.google.com/privacy'),
-          mode: LaunchMode.externalApplication,
-        ),
-        child: const Text('Google Privacy Policy'),
-      ),
-    ],
-  );
-
   Future<void> openGuardianCamera(Widget screen) async {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     if (Platform.isAndroid && screen is GuardianAr && !screen.demo) {
@@ -1142,21 +1111,9 @@ class _SessionScreenState extends State<SessionScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Google-assisted alignment uses outdoor visual features to place the recorded trail. It needs internet, a compatible phone and available coverage.',
+                  'Google-assisted alignment places the trail using outdoor visual features. It needs internet, a compatible phone and available coverage.',
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'To power this session, Google will process sensor data (e.g., camera and location).',
-                ),
-                TextButton(
-                  onPressed: () => launchUrl(
-                    Uri.parse(
-                      'https://support.google.com/ar?p=how-google-play-services-for-ar-handles-your-data',
-                    ),
-                    mode: LaunchMode.externalApplication,
-                  ),
-                  child: const Text('Learn more'),
-                ),
+                const SizedBox(height: 16),
                 const Text(
                   'Local alignment processes the camera on this phone and requires an outdoor walking baseline. Unsupported AR phones use a GPS + compass guide.',
                 ),
@@ -1581,7 +1538,6 @@ class _SessionScreenState extends State<SessionScreen>
           ),
         ]),
         section('Device setup', [
-          if (Platform.isAndroid) arPrivacyNotice(),
           if (showDemoControls)
             action(
               Icons.view_in_ar,
@@ -1613,26 +1569,14 @@ class _SessionScreenState extends State<SessionScreen>
         if (c.guardian && phase != 'resolved')
           section('Guardian alerts', [guardianMonitoring()]),
         section('Appearance', [
-          const Text('The map follows your appearance.'),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final mode in ThemeMode.values)
-                ChoiceChip(
-                  label: Text(
-                    {
-                      'system': 'System',
-                      'light': 'Light',
-                      'dark': 'Dark',
-                    }[mode.name]!,
-                  ),
-                  selected: widget.appearance == mode,
-                  onSelected: (_) => widget.onAppearanceChanged?.call(mode),
-                  materialTapTargetSize: MaterialTapTargetSize.padded,
-                ),
-            ],
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Light theme'),
+            subtitle: const Text('Dark theme is used by default.'),
+            value: widget.appearance == ThemeMode.light,
+            onChanged: (light) => widget.onAppearanceChanged?.call(
+              light ? ThemeMode.light : ThemeMode.dark,
+            ),
           ),
           const Divider(height: 24),
           SwitchListTile.adaptive(

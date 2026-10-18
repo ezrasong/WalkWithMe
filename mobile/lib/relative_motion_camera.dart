@@ -121,7 +121,7 @@ class _RelativeMotionCameraState extends State<RelativeMotionCamera>
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('KAZE pocket motion camera')),
+    appBar: AppBar(title: const Text('WalkWithMe pocket motion camera')),
     body: SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(12),

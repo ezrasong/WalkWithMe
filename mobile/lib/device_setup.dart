@@ -114,7 +114,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen>
 
   Widget card(List<Widget> children) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
@@ -139,15 +139,13 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen>
       appBar: AppBar(title: const Text('Set up WalkWithMe')),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 40),
           children: [
             Container(
-              padding: const EdgeInsets.all(22),
+              padding: const EdgeInsets.all(26),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xff173d86), Color(0xff0a1d43)],
-                ),
-                borderRadius: BorderRadius.circular(26),
+                color: const Color(0xff102d62),
+                borderRadius: BorderRadius.circular(18),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,7 +176,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen>
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
             Text(
               android
                   ? 'Allow location and reminders, then review battery and background access. Setup does not start recording; each safety session needs your consent.'

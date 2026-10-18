@@ -96,15 +96,13 @@ class _GuardianPairingScreenState extends State<GuardianPairingScreen>
       appBar: AppBar(title: const Text('Invite your guardian')),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 40),
           children: [
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(26),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xff173d86), Color(0xff0a1d43)],
-                ),
-                borderRadius: BorderRadius.circular(24),
+                color: const Color(0xff102d62),
+                borderRadius: BorderRadius.circular(18),
               ),
               child: const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +118,7 @@ class _GuardianPairingScreenState extends State<GuardianPairingScreen>
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 22),
             if (loading) const Center(child: CircularProgressIndicator()),
             if (usable) ...[
               Center(

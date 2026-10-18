@@ -54,22 +54,7 @@ class CameraNavigation extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           camera,
-          const IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0x99000000),
-                    Colors.transparent,
-                    Color(0x55000000),
-                  ],
-                  stops: [0, .4, 1],
-                ),
-              ),
-            ),
-          ),
+          const IgnorePointer(child: ColoredBox(color: Color(0x22000000))),
           SafeArea(
             child: LayoutBuilder(
               builder: (context, size) => SingleChildScrollView(
@@ -94,7 +79,7 @@ class CameraNavigation extends StatelessWidget {
                                 const SizedBox(width: 12),
                                 const Expanded(
                                   child: Text(
-                                    'KAZE camera guide',
+                                    'WalkWithMe camera guide',
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 20,
