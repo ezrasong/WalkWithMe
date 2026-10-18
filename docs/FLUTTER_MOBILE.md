@@ -66,6 +66,16 @@ open ios/Runner.xcworkspace
 
 In Xcode, select Runner, enable **Automatically manage signing**, choose your Apple Account's Personal Team and the connected iPhone, then run. Enable iPhone Developer Mode if requested. This is a signed development build. A free Apple Account supports local installation and local notification reminders, usually with a seven-day provisioning lifetime. It does not provide Apple remote push capability. TestFlight/App Store distribution and remote push require paid Apple Developer membership. Leave the default `Kaze.entitlements` and `KAZE_PUSH_ENABLED=NO` for free-account testing.
 
+For an existing checkout, pull and rebuild after each update. To install a build that can launch from the app icon, first configure signing in Xcode as above, then run from `mobile/`:
+
+```sh
+flutter pub get
+flutter devices
+flutter run --release -d YOUR_IPHONE_DEVICE_ID --dart-define=KAZE_BASE_URL=https://your-service.example
+```
+
+Use the same reachable HTTPS service on both phones. Pulling source does not update an installed app. A Flutter debug build on a physical iPhone must be launched through Flutter/Xcode with the development tooling attached; use release for an independent filming or house-test launch. `--no-codesign` is an option for `flutter build ios`, not `flutter run`; installation on a physical iPhone still requires signing. Release mode does not change the free provisioning lifetime or enable Apple push. Signed release installation and physical AR accuracy still need verification on the Mac/iPhone.
+
 Join as guardian by scanning the QR code shown in Settings on the wearer's phone, or entering its 10-character pairing code. Background wearer recording currently runs on Android. Signed builds and real-device permissions still need physical iPhone verification.
 
 ### iOS simulator regression suite
