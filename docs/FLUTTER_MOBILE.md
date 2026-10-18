@@ -102,7 +102,7 @@ large text, licenses and access removal. It does not measure GPS or compass accu
 camera rendering, AR registration, background delivery or paired-watch behavior.
 ARKit world tracking and the camera require physical devices.
 
-During an active assistance request, **Guardian spatial AR** requests camera and precise foreground location on the guardian phone. Use a safe outdoor area with space for a 30–100 m walking registration baseline; weak locations or missing compatible heights return to the map. It displays supported recorded observations with uncertainty, without route/floor/obstacle guidance. Camera processing stays local. See [registration and verification limits](AR_BACKEND.md). The iPhone 17/iOS 26.6.2 target still needs a signed Xcode run and physical testing; Windows Android tests cannot verify it.
+During an active assistance request, **Guardian spatial AR** requests camera and precise foreground location on the guardian phone. Use a safe outdoor area with space for a 30–100 m walking registration baseline; weak locations return to the map. After alignment it displays the recorded trail, direction chevrons and a live next-point arrow/distance. Missing compatible heights use a labeled floating horizontal guide and do not block the camera. Trail gaps are never joined; ground, floors, stairs and obstacles are not detected. Camera processing stays local. See [registration and verification limits](AR_BACKEND.md). The iPhone 17/iOS 26.6.2 target still needs a signed Xcode run and physical testing; Windows Android tests cannot verify it.
 
 ## Permissions and updates
 

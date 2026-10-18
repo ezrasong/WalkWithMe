@@ -27,7 +27,8 @@ export function guardianArTrail(events, now) {
   const geography = geographicTrail(events, now);
   // The anchor ID identifies the frame. Earlier fixes arriving late can change
   // it, in which case the guardian must discard its old camera registration.
-  const anchorFix = geography.fixes.find(horizontalUsable);
+  const accepted = geography.paths.flatMap(path => path.points).sort((a, b) => a.fixAt - b.fixAt);
+  const anchorFix = accepted.find(horizontalUsable);
   const warnings = [...geography.warnings,
     'Camera registration is required. Geographic coordinates alone do not align an AR camera.',
     'This is an experimental recorded trail, not a navigable route through walls or stairs.'];
@@ -40,7 +41,7 @@ export function guardianArTrail(events, now) {
     verticalAccuracy: verticalUsable(anchorFix) ? anchorFix.verticalAccuracy : null };
   anchor.altitudeDatum = anchorFix.altitudeDatum ?? null;
   const paths = [];
-  let omitted = 0, included = 0;
+  let omitted = geography.rejected, included = 0;
   for (const path of geography.paths) {
     let segment = null;
     for (const fix of path.points) {

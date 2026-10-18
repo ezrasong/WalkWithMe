@@ -115,4 +115,19 @@ void main() {
     }
     await tester.pumpWidget(const SizedBox());
   });
+  test('map draws filtered vertices rather than raw GPS jitter', () {
+    final snapshot = located();
+    snapshot['geography']['mapPaths'] = [
+      {
+        'source': 'phone',
+        'points': [
+          {'latitude': 43.6, 'longitude': -79.4},
+          {'latitude': 43.601, 'longitude': -79.4},
+        ],
+      },
+    ];
+    final lines = trailLayers(snapshot).whereType<ml.PolylineLayer>().toList();
+    expect(lines[0].list, hasLength(1));
+    expect(lines[1].list, isEmpty);
+  });
 }

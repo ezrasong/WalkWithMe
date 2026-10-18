@@ -112,7 +112,7 @@ class SpatialRegistration {
       ? 'Walk safely outdoors with camera tracking. Need a 30–100 m baseline and precise locations.'
       : !ready
       ? 'Continue walking: validating registration ($checks/3 later fixes).'
-      : 'Registered locally. Baseline ${baseline.round()} m; validation residual ${residual.toStringAsFixed(1)} m. Experimental recorded observations only.';
+      : 'Camera aligned. Baseline ${baseline.round()} m; validation residual ${residual.toStringAsFixed(1)} m. Follow the recorded trail where safe.';
 
   // A frozen two-point rigid fit is checked against later, withheld fixes.
   // GPS accuracy values are allowances, never calibrated confidence intervals.
@@ -205,42 +205,139 @@ class SpatialRegistration {
       return [];
     }
     final points = <Map<String, Object>>[];
+    var pathIndex = 0;
     for (final path in packet['paths'] as List) {
+      String? segment, lastMode;
+      var index = 0;
       for (final p in path['points'] as List) {
-        // Do not invent camera-height, ground, floor or terrain coordinates.
-        if (p['y'] is! num ||
-            p['verticalUncertainty'] is! num ||
-            p['altitudeDatum'] != 'WGS84-ellipsoid' ||
-            !_vertical.isFinite) {
+        final id = (p['id'] ?? '${pathIndex}_${index++}').toString();
+        if ([
+          'x',
+          'z',
+          'relativeHorizontalUncertainty',
+        ].any((key) => p[key] is! num || !(p[key] as num).isFinite)) {
+          segment = null;
           continue;
         }
         final x = _n(p, 'x'), z = _n(p, 'z');
         final middleX = (_first!.east + _end!.east) / 2;
         final middleZ = (_first!.south + _end!.south) / 2;
         final uncertainty =
-            _n(p, 'relativeHorizontalUncertainty') +
+            // Anchor coordinates occur on both sides of the rigid fit and
+            // cancel; include the fix's accuracy once, not the anchor twice.
+            (p['horizontalAccuracy'] is num
+                ? _n(p, 'horizontalAccuracy')
+                : _n(p, 'relativeHorizontalUncertainty')) +
             _uncertainty +
             residual +
             _distance(x - middleX, z - middleZ) * math.sin(yawAllowance) +
             (_travel - _fitTravel) * .02;
-        final vertical = _n(p, 'verticalUncertainty') + _vertical;
+        final vertical = p['verticalUncertainty'] is num
+            ? _n(p, 'verticalUncertainty') + _vertical
+            : double.infinity;
+        final measured =
+            p['y'] is num &&
+            (p['y'] as num).isFinite &&
+            p['altitudeDatum'] == 'WGS84-ellipsoid' &&
+            vertical > 0 &&
+            vertical <= 10;
+        final mode = measured ? 'measured' : 'horizontal';
         final wx = _c * x - _s * z + _tx, wz = _s * x + _c * z + _tz;
-        if (uncertainty > 10 ||
-            vertical > 10 ||
+        if (!uncertainty.isFinite ||
+            uncertainty <= 0 ||
+            uncertainty > 25 ||
             _distance(wx - _last!.x, wz - _last!.z) > 50) {
+          segment = null;
           continue;
         }
+        if (segment == null || lastMode != mode) segment = '$pathIndex:$id';
+        lastMode = mode;
         points.add({
+          'id': id,
+          'segment': segment,
+          'heightMode': mode,
           'x': wx,
-          'y': _n(p, 'y') + _ty,
+          // A presentation plane below the initial camera, never an inferred
+          // ground surface, floor, or recorded altitude.
+          'y': measured ? _n(p, 'y') + _ty : _first!.y - 1.3,
           'z': wz,
           'uncertainty': uncertainty,
-          'verticalUncertainty': vertical,
+          'verticalUncertainty': measured ? vertical : 0.0,
           'source': path['source'] as String,
         });
       }
+      pathIndex++;
     }
     // Bound rendering cost without joining or filling missing observations.
     return points.length <= 200 ? points : points.sublist(points.length - 200);
+  }
+}
+
+class CameraTrailCue {
+  final double turn, distance, uncertainty;
+  final bool last;
+  CameraTrailCue(this.turn, this.distance, this.last, this.uncertainty);
+  bool get nearby => distance <= math.max(3, uncertainty);
+  String get direction => turn.abs() < .35
+      ? 'ahead'
+      : turn.abs() > 2.6
+      ? 'turn around'
+      : turn > 0
+      ? 'turn right'
+      : 'turn left';
+  String get message =>
+      '${nearby ? 'Near the recorded point' : 'Approximate direction: $direction'}; about ${distance.round()} m. ${last ? 'Last supported point. Search within the uncertainty ring; arrival is not verified.' : 'Next recorded point. Follow the trail only where passable.'}';
+}
+
+// Progress stays within one continuous source segment. A gap cannot silently
+// become a straight-line instruction to the next trail section.
+class CameraTrailGuidance {
+  String? segment, target;
+  CameraTrailCue? update(
+    List<Map<String, Object>> points, {
+    required double x,
+    required double z,
+    required double forwardX,
+    required double forwardZ,
+  }) {
+    if (_distance(forwardX, forwardZ) < .2) return null;
+    if (segment == null) {
+      final phone = points.where((p) => p['source'] == 'phone').toList();
+      final candidates = phone.isNotEmpty ? phone : points;
+      if (candidates.isEmpty) return null;
+      final nearest = candidates.reduce(
+        (a, b) =>
+            _distance(_n(a, 'x') - x, _n(a, 'z') - z) <=
+                _distance(_n(b, 'x') - x, _n(b, 'z') - z)
+            ? a
+            : b,
+      );
+      segment = nearest['segment'] as String;
+      target = nearest['id'] as String;
+    }
+    // Range clipping can change the visible segment's first point. Retain
+    // progress only when the same target observation is still present.
+    final retained = points.where((p) => p['id'] == target);
+    if (retained.isNotEmpty) segment = retained.first['segment'] as String;
+    final path = points.where((p) => p['segment'] == segment).toList();
+    var index = path.indexWhere((p) => p['id'] == target);
+    if (index < 0) return null;
+    while (index < path.length - 1 &&
+        _distance(_n(path[index], 'x') - x, _n(path[index], 'z') - z) <= 3) {
+      index++;
+    }
+    final p = path[index];
+    target = p['id'] as String;
+    final dx = _n(p, 'x') - x, dz = _n(p, 'z') - z;
+    final turn = math.atan2(
+      forwardX * dz - forwardZ * dx,
+      forwardX * dx + forwardZ * dz,
+    );
+    return CameraTrailCue(
+      turn,
+      _distance(dx, dz),
+      index == path.length - 1,
+      (p['uncertainty'] as num? ?? 0).toDouble(),
+    );
   }
 }

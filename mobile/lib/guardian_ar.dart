@@ -23,6 +23,10 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
   late final SessionAccess? openingAccess;
   bool prepared = false, closed = false, loading = false;
   int count = 0;
+  final guidance = CameraTrailGuidance();
+  CameraTrailCue? cue;
+  List<Map<String, Object>> renderedPoints = [];
+  double? cameraX, cameraZ, forwardX, forwardZ;
   String status = 'Checking guardian access and native AR support.';
   bool get authorized =>
       widget.session.visible &&
@@ -106,18 +110,6 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
         return;
       }
       final anchor = next['frame']['anchor'] as Map;
-      if (anchor['altitudeDatum'] != 'WGS84-ellipsoid' ||
-          anchor['altitude'] is! num ||
-          !(next['paths'] as List).any(
-            (path) => (path['points'] as List).any(
-              (p) => p['y'] is num && p['altitudeDatum'] == 'WGS84-ellipsoid',
-            ),
-          )) {
-        close(
-          'Recorded heights have no compatible vertical reference. Use the map.',
-        );
-        return;
-      }
       if (registration != null && registration!.anchor['id'] != anchor['id']) {
         close('Recorded frame changed. Reopen AR to register again.');
         return;
@@ -153,6 +145,23 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
               ? call.arguments as String
               : 'Camera tracking, permissions or location lost. Use the map.',
         );
+        return;
+      }
+      if (call.method == 'pose' && call.arguments is Map) {
+        final pose = call.arguments as Map;
+        if ([
+          'x',
+          'z',
+          'forwardX',
+          'forwardZ',
+        ].every((key) => pose[key] is num && (pose[key] as num).isFinite)) {
+          cameraX = (pose['x'] as num).toDouble();
+          cameraZ = (pose['z'] as num).toDouble();
+          forwardX = (pose['forwardX'] as num).toDouble();
+          forwardZ = (pose['forwardZ'] as num).toDouble();
+          updateCue();
+          if (mounted) setState(() {});
+        }
         return;
       }
       if (call.method != 'sample' || registration == null) return;
@@ -205,11 +214,13 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
     final points = registration!.breadcrumbs(packet!);
     if (registration!.ready && points.isEmpty) {
       close(
-        'No recorded observations meet current 3D uncertainty limits. Use the map.',
+        'No nearby recorded points meet horizontal accuracy limits. Use the map.',
       );
       return;
     }
     count = points.length;
+    renderedPoints = points;
+    updateCue(points);
     try {
       await channel?.invokeMethod('render', points);
     } catch (_) {
@@ -217,6 +228,20 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
       return;
     }
     if (mounted) setState(() {});
+  }
+
+  void updateCue([List<Map<String, Object>>? points]) {
+    if (registration?.ready != true || packet == null || cameraX == null) {
+      cue = null;
+      return;
+    }
+    cue = guidance.update(
+      points ?? renderedPoints,
+      x: cameraX!,
+      z: cameraZ!,
+      forwardX: forwardX!,
+      forwardZ: forwardZ!,
+    );
   }
 
   void close(String reason) {
@@ -228,6 +253,8 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
     startupTimer?.cancel();
     packet = null;
     registration = null;
+    cue = null;
+    renderedPoints = [];
     channel?.invokeMethod('stop').catchError((Object _) {});
     if (mounted) {
       setState(() {
@@ -269,28 +296,67 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                 const Padding(
                   padding: EdgeInsets.all(12),
                   child: Text(
-                    'Experimental outdoor observations. Walk only where safe. Camera processing stays on this guardian phone. No floor, stair, wall, obstacle or route guidance.',
+                    'Follow the recorded outdoor trail only where safe. Align the camera by walking as instructed. Missing heights use a floating horizontal guide, not the ground or a floor. Walls, stairs and obstacles are not detected. Camera processing stays on this phone.',
                   ),
                 ),
               if (!closed)
                 SizedBox(
                   height: constraints.maxHeight * .5,
-                  child: prepared
-                      ? (Platform.isAndroid
-                            ? AndroidView(
-                                viewType: 'app.kaze/guardian-ar',
-                                onPlatformViewCreated: created,
-                              )
-                            : UiKitView(
-                                viewType: 'app.kaze/guardian-ar',
-                                onPlatformViewCreated: created,
-                              ))
-                      : Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Text(status),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      prepared
+                          ? (Platform.isAndroid
+                                ? AndroidView(
+                                    viewType: 'app.kaze/guardian-ar',
+                                    onPlatformViewCreated: created,
+                                  )
+                                : UiKitView(
+                                    viewType: 'app.kaze/guardian-ar',
+                                    onPlatformViewCreated: created,
+                                  ))
+                          : Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Text(status),
+                              ),
+                            ),
+                      if (cue != null)
+                        Positioned(
+                          left: 16,
+                          bottom: 16,
+                          child: Semantics(
+                            label: cue!.message,
+                            child: Material(
+                              color: Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (!cue!.nearby)
+                                      Transform.rotate(
+                                        angle: cue!.turn,
+                                        child: const Icon(
+                                          Icons.arrow_upward,
+                                          size: 48,
+                                        ),
+                                      )
+                                    else
+                                      const Icon(
+                                        Icons.location_searching,
+                                        size: 48,
+                                      ),
+                                    Text('~${cue!.distance.round()} m'),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ),
+                    ],
+                  ),
                 ),
               Padding(
                 padding: const EdgeInsets.all(12),
@@ -307,11 +373,19 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                         const SizedBox(height: 8),
                       ],
                       Text(status),
+                      if (cue != null) ...[
+                        const SizedBox(height: 8),
+                        Text(cue!.message),
+                      ],
+                      if (registration?.ready == true && cue == null)
+                        const Text(
+                          'Point the camera ahead. If this trail section is no longer visible, use the map to choose the next safe section.',
+                        ),
                       const SizedBox(height: 8),
                       Text(
                         closed
                             ? 'Recorded locations remain on the map.'
-                            : '$count supported breadcrumbs. Cyan: phone. Orange: watch (may be phone-derived). Rings and bars show uncertainty allowances up to 10 m. Unknown heights and excessive uncertainty are omitted; gaps are never joined.',
+                            : '$count recorded breadcrumbs. Cyan: phone. Orange: watch (may be phone-derived). Rings show horizontal uncertainty up to 25 m. Vertical bars appear only with compatible measured heights. Floating guides have no measured height. Gaps are never joined.',
                       ),
                     ],
                   ),

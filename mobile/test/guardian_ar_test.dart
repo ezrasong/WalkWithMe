@@ -21,6 +21,7 @@ void main() {
   late String support;
   late int viewId, requests;
   late bool deny;
+  late List<List> renders;
   SessionAccess access(String role) => SessionAccess(
     baseUrl: 'https://test.example',
     id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
@@ -43,6 +44,7 @@ void main() {
     viewId = -1;
     requests = 0;
     deny = false;
+    renders = [];
     evidence = {
       'version': 1,
       'available': true,
@@ -96,6 +98,7 @@ void main() {
           MethodChannel('app.kaze/guardian-ar/$viewId'),
           (call) async {
             calls.add(call.method);
+            if (call.method == 'render') renders.add(call.arguments as List);
             return null;
           },
         );
@@ -173,15 +176,94 @@ void main() {
     expect(viewId, -1);
     await close(tester);
   });
-  testWidgets('legacy heights cannot open a spatial camera session', (
+  testWidgets('legacy heights open a horizontal trail camera session', (
     tester,
   ) async {
     (evidence['frame']['anchor'] as Map).remove('altitudeDatum');
     await open(tester);
-    expect(calls, isEmpty);
-    expect(find.textContaining('compatible vertical reference'), findsWidgets);
+    expect(calls, contains('start'));
+    expect(find.textContaining('floating horizontal guide'), findsOneWidget);
+    expect(find.textContaining('compatible vertical reference'), findsNothing);
     await close(tester);
   });
+  testWidgets(
+    'legacy trail renders after alignment and camera turns update live guidance',
+    (tester) async {
+      (evidence['frame']['anchor'] as Map).remove('altitudeDatum');
+      evidence['paths'] = [
+        {
+          'source': 'phone',
+          'points': [
+            {
+              'id': 'next',
+              'x': 45,
+              'z': 0,
+              'y': null,
+              'horizontalAccuracy': 1,
+              'relativeHorizontalUncertainty': 2,
+            },
+            {
+              'id': 'later',
+              'x': 50,
+              'z': 0,
+              'y': null,
+              'horizontalAccuracy': 1,
+              'relativeHorizontalUncertainty': 2,
+            },
+          ],
+        },
+      ];
+      await open(tester);
+      for (var i = 0; i <= 36; i++) {
+        evidence['latestFixAt'] = session.serverNow;
+        await event('sample', {
+          't': 100.0 + i,
+          'x': i.toDouble(),
+          'y': 1.5,
+          'z': 0.0,
+          'latitude': 0.0,
+          'longitude': i / 111319.490793,
+          'accuracy': 1.0,
+          'ageMs': 50.0,
+          'mock': false,
+        });
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pump();
+      }
+      expect(renders.last, hasLength(2));
+      expect(renders.last.first['heightMode'], 'horizontal');
+      expect(renders.last.first['verticalUncertainty'], 0);
+      expect(renders.last.first['segment'], renders.last.last['segment']);
+      await event('pose', {
+        'x': 36.0,
+        'z': 0.0,
+        'forwardX': 0.0,
+        'forwardZ': -1.0,
+      });
+      await tester.pump();
+      expect(
+        find.textContaining('Approximate direction: turn right'),
+        findsOneWidget,
+      );
+      await event('pose', {
+        'x': 36.0,
+        'z': 0.0,
+        'forwardX': 1.0,
+        'forwardZ': 0.0,
+      });
+      await tester.pump();
+      expect(
+        find.textContaining('Approximate direction: ahead'),
+        findsOneWidget,
+      );
+      session.snapshot = null;
+      session.changed();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Approximate direction:'), findsNothing);
+      expect(calls, contains('stop'));
+      await close(tester);
+    },
+  );
   testWidgets(
     'native failure reason is visible and logged without private evidence',
     (tester) async {

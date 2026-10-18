@@ -37,7 +37,7 @@ function draw() {
   $('private-message').hidden=state.shared;
   $('empty-location').hidden=!state.shared || !!latest;
   if (!latest) { lastTarget=null; return; }
-  for (const path of geo.paths) {
+  for (const path of geo.mapPaths ?? geo.paths) {
     const color=path.source==='phone'?'#225cbe':'#7946ad';
     if(path.points.length>1) L.polyline(path.points.map(p=>[p.latitude,p.longitude]),{color,weight:4}).addTo(evidenceLayer);
     for (const p of path.points) L.circleMarker([p.latitude,p.longitude],{radius:3,color,fillOpacity:1}).bindTooltip(`${p.source}: ${new Date(p.fixAt).toLocaleTimeString()}, reported accuracy ${Math.round(p.accuracy)} m`).addTo(evidenceLayer);
@@ -45,7 +45,7 @@ function draw() {
   L.circle([latest.latitude,latest.longitude],{radius:latest.accuracy,color:'#225cbe',weight:1,fillOpacity:.09}).addTo(evidenceLayer);
   L.marker([latest.latitude,latest.longitude],{icon:L.divIcon({className:'person-marker',iconSize:[20,20]}),title:'Last reported location'}).addTo(evidenceLayer);
   const target=[latest.latitude,latest.longitude];
-  if(!fitted) { map.fitBounds(L.latLngBounds(geo.fixes.map(p=>[p.latitude,p.longitude])).pad(.2),{maxZoom:17}); fitted=true; }
+  if(!fitted) { map.fitBounds(L.latLngBounds([target,...(geo.mapPaths ?? geo.paths).flatMap(path=>path.points.map(p=>[p.latitude,p.longitude]))]).pad(.2),{maxZoom:17}); fitted=true; }
   lastTarget=target;
 }
 function tick() {

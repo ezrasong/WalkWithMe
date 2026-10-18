@@ -46,7 +46,7 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
     private volatile Location fix;
     private volatile boolean stopped, started;
     private boolean tracked;
-    private long lastFix, opened;
+    private long lastFix, opened, lastPose;
     private volatile long lease;
     private final Runnable watchdog = new Runnable() {
         @Override public void run() {
@@ -181,13 +181,27 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
                 (lease > 0 && SystemClock.elapsedRealtime() - lease > 2500)) { fail(); return; }
             if (c.getTrackingState() != TrackingState.TRACKING) { if (tracked) fail(); return; }
             tracked = true;
+            if (frame.getTimestamp() - lastPose >= 100000000) {
+                lastPose = frame.getTimestamp();
+                Pose pose = c.getPose();
+                float[] back = pose.getZAxis();
+                Map<String,Object> live = new HashMap<>();
+                live.put("x", (double)pose.tx()); live.put("z", (double)pose.tz());
+                live.put("forwardX", (double)-back[0]); live.put("forwardZ", (double)-back[2]);
+                main.post(() -> { if (!stopped) channel.invokeMethod("pose", live); });
+            }
             sample(frame, c);
             c.getProjectionMatrix(projection,0,.1f,100f); c.getViewMatrix(camera,0);
             Matrix.multiplyMM(mvp,0,projection,0,camera,0);
             GLES20.glEnable(GLES20.GL_DEPTH_TEST);
             GLES20.glUseProgram(geometryProgram);
             GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(geometryProgram,"mvp"),1,false,mvp,0);
-            for (Map<String,Object> p : points) draw(p);
+            Map<String,Object> previous = null;
+            for (Map<String,Object> p : points) {
+                draw(p);
+                if (previous != null && p.get("segment") != null && p.get("segment").equals(previous.get("segment"))) connect(previous, p);
+                previous = p;
+            }
         } catch (Exception e) { fail(); }
     }
 
@@ -216,13 +230,15 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
     private void draw(Map<String,Object> p) {
         float x = number(p,"x"), y = number(p,"y"), z = number(p,"z");
         float r = number(p,"uncertainty"), v = number(p,"verticalUncertainty");
-        if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(z) || !(r > 0 && r <= 10 && v > 0 && v <= 10)) return;
+        boolean horizontal = "horizontal".equals(p.get("heightMode"));
+        if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(z) || !(r > 0 && r <= 25) ||
+            !(horizontal ? v == 0 : v > 0 && v <= 10)) return;
         boolean watch = "watch".equals(p.get("source"));
         GLES20.glUniform4f(GLES20.glGetUniformLocation(geometryProgram,"color"),watch ? 1f : 0f, watch ? .55f : 1f, watch ? .05f : 1f,1f);
         float[] ring = new float[48 * 3];
         for (int i=0;i<48;i++) { ring[3*i]=x+r*(float)Math.cos(i*Math.PI/24); ring[3*i+1]=y; ring[3*i+2]=z+r*(float)Math.sin(i*Math.PI/24); }
         geometry(ring,GLES20.GL_LINE_LOOP);
-        geometry(new float[]{x,y-v,z,x,y+v,z},GLES20.GL_LINES);
+        if (!horizontal) geometry(new float[]{x,y-v,z,x,y+v,z},GLES20.GL_LINES);
         // A small metric octahedron marks the observation; rings are allowances.
         float s=.18f;
         float[][] vertices={{x+s,y,z},{x,y,z+s},{x-s,y,z},{x,y,z-s}};
@@ -233,6 +249,20 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
             for(float f:vertices[(i+1)%4]) triangles[k++]=f;
         }
         geometry(triangles,GLES20.GL_TRIANGLES);
+    }
+    private void connect(Map<String,Object> a, Map<String,Object> b) {
+        float ax=number(a,"x"), ay=number(a,"y"), az=number(a,"z");
+        float bx=number(b,"x"), by=number(b,"y"), bz=number(b,"z");
+        float dx=bx-ax, dz=bz-az, length=(float)Math.hypot(dx,dz);
+        if (!Float.isFinite(length) || !Float.isFinite(ay) || !Float.isFinite(by) || length < .3f) return;
+        float sx=-dz/length*.12f, sz=dx/length*.12f;
+        geometry(new float[]{ax+sx,ay,az+sz, ax-sx,ay,az-sz, bx+sx,by,bz+sz,
+            ax-sx,ay,az-sz, bx-sx,by,bz-sz, bx+sx,by,bz+sz},GLES20.GL_TRIANGLES);
+        // A chevron indicates recording order inside this continuous segment.
+        float cx=(ax+bx)/2, cy=(ay+by)/2, cz=(az+bz)/2;
+        float ux=dx/length*.5f, uz=dz/length*.5f;
+        geometry(new float[]{cx+ux,cy,cz+uz, cx-ux+sx*3,cy,cz-uz+sz*3,
+            cx-ux-sx*3,cy,cz-uz-sz*3},GLES20.GL_TRIANGLES);
     }
     private void geometry(float[] vertices,int mode) {
         attribute(geometryProgram,"p",3,buffer(vertices)); GLES20.glDrawArrays(mode,0,vertices.length/3);

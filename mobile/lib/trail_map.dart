@@ -31,7 +31,7 @@ List<ml.Layer> trailLayers(Map<String, dynamic> snapshot) {
       ),
   ];
   final closedRing = ring.reversed.toList()..add(ring.last);
-  final paths = geo?['paths'] as List? ?? [];
+  final paths = (geo?['mapPaths'] ?? geo?['paths']) as List? ?? [];
   final point = ml.Feature(geometry: ml.Point(center));
   return [
     ml.PolygonLayer(
@@ -82,7 +82,7 @@ class _TrailMapState extends State<TrailMap> {
   Timer? loadingTimer;
   Map? get geo => widget.snapshot['geography'] as Map?;
   Map? get latest => geo?['latest'] as Map?;
-  List get paths => geo?['paths'] as List? ?? [];
+  List get paths => (geo?['mapPaths'] ?? geo?['paths']) as List? ?? [];
   double get locationZoom => (latest?['accuracy'] as num? ?? 0) > 50 ? 15 : 16;
   String get nextStyle => widget.tiles
       ? Theme.of(context).brightness == Brightness.dark

@@ -66,6 +66,7 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
   private let channel: FlutterMethodChannel
   private var fix: CLLocation?
   private var lastFix: TimeInterval = 0
+  private var lastPose: TimeInterval = 0
   private var lease: TimeInterval = 0
   private var opened: TimeInterval = 0
   private var started = false
@@ -160,6 +161,14 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
       if tracked { fail("ARKit camera tracking lost. Reopen AR from the map.") }; return
     }
     tracked = true
+    if frame.timestamp - lastPose >= 0.1 {
+      lastPose = frame.timestamp
+      let pose = frame.camera.transform
+      channel.invokeMethod("pose", arguments: [
+        "x": Double(pose.columns.3.x), "z": Double(pose.columns.3.z),
+        "forwardX": Double(-pose.columns.2.x), "forwardZ": Double(-pose.columns.2.z)
+      ])
+    }
     guard let fix = fix, fix.timestamp.timeIntervalSince1970 > lastFix else { return }
     let age = Date().timeIntervalSince(fix.timestamp) - (uptime - frame.timestamp)
     // Do not pair cached positions with a newer camera pose.
@@ -177,11 +186,13 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
 
   private func draw(_ points: [[String: Any]]) {
     dots.children.forEach { $0.removeFromParent() }
+    var previous: [String: Any]?
     for p in points {
       guard let x = p["x"] as? Double, let y = p["y"] as? Double, let z = p["z"] as? Double,
         let radius = p["uncertainty"] as? Double, let vertical = p["verticalUncertainty"] as? Double,
         [x, y, z, radius, vertical].allSatisfy({ $0.isFinite }),
-        radius > 0, radius <= 10, vertical > 0, vertical <= 10 else { continue }
+        radius > 0, radius <= 25,
+        (p["heightMode"] as? String == "horizontal" ? vertical == 0 : vertical > 0 && vertical <= 10) else { previous = nil; continue }
       let color: UIColor = p["source"] as? String == "watch" ? .systemOrange : .cyan
       let material = UnlitMaterial(color: color)
       let group = Entity()
@@ -204,8 +215,36 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
       descriptor.primitives = .triangles(indices)
       guard let ring = try? MeshResource.generate(from: [descriptor]) else { fail("AR uncertainty geometry could not be rendered. Use the map."); return }
       group.addChild(ModelEntity(mesh: ring, materials: [material]))
-      group.addChild(ModelEntity(mesh: .generateBox(size: SIMD3<Float>(0.04, Float(2 * vertical), 0.04)), materials: [material]))
+      if vertical > 0 {
+        group.addChild(ModelEntity(mesh: .generateBox(size: SIMD3<Float>(0.04, Float(2 * vertical), 0.04)), materials: [material]))
+      }
       dots.addChild(group)
+      if let a = previous, let segment = p["segment"] as? String,
+        segment == (a["segment"] as? String),
+        let ax = a["x"] as? Double, let ay = a["y"] as? Double, let az = a["z"] as? Double {
+        let start = SIMD3<Float>(Float(ax), Float(ay), Float(az))
+        let end = SIMD3<Float>(Float(x), Float(y), Float(z))
+        let delta = end - start
+        let length = simd_length(delta)
+        if length > 0.3 {
+          let line = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(0.24, 0.035, length)), materials: [material])
+          line.position = (start + end) / 2
+          line.orientation = simd_quatf(from: SIMD3<Float>(0, 0, 1), to: delta / length)
+          dots.addChild(line)
+          let direction = delta / length
+          let side = SIMD3<Float>(-direction.z, 0, direction.x) * 0.36
+          let center = (start + end) / 2
+          var arrow = MeshDescriptor(name: "Trail direction")
+          arrow.positions = MeshBuffers.Positions([
+            center + direction * 0.5, center - direction * 0.5 + side, center - direction * 0.5 - side
+          ])
+          arrow.primitives = .triangles([0, 1, 2, 2, 1, 0])
+          if let mesh = try? MeshResource.generate(from: [arrow]) {
+            dots.addChild(ModelEntity(mesh: mesh, materials: [material]))
+          }
+        }
+      }
+      previous = p
     }
   }
   deinit {
