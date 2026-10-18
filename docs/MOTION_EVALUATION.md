@@ -51,6 +51,14 @@ Owner and authorized guardian snapshots expose `relativeMotion`; the alert-scope
 
 Starting room, floor, geographic origin and north remain unknown. Absolute uncertainty is uncalibrated; a growing time/distance drift budget is explicitly an engineering indicator rather than a probabilistic bound. Existing device geographic observations and optional Android Geospatial localization can supply outdoor environmental references where usable. They do not register arbitrary indoor motion to a room or a guardian’s camera. An unmapped indoor scene remains unavailable for spatial guidance. All motion estimates remain `researchOnly: true`, `guidanceAllowed: false`, with no claim of measured pocket-walking accuracy.
 
+## Owner-only tuning diagnostics
+
+New-session consent includes technical motion diagnostics. Older sessions can enable **Settings → Motion trail evaluation → Keep owner-only motion diagnostics**. At most 120 received-batch summaries are kept in SQLite until session expiry/deletion or diagnostic consent withdrawal. They include delivered sensor rates/gaps, input counts, model and total processing time, stationary-window counts, speed statistics, stream sequence/clock uncertainty, retained section counts and time-matched watch activity checks. Batch distance includes overlapping context and must not be summed as wearer distance. Failure records use fixed reason codes rather than exception text. No raw samples, camera images, names, coordinates or credentials are included. These records support debugging; they do not constitute reference measurements or train/change the model automatically.
+
+Only the owner can read `GET /api/sessions/:id/motion-diagnostics` or change consent with confirmed `POST {enabled, confirm:true}`. Guardian/watch access is rejected. Withdrawal during inference prevents the pending result from restoring diagnostic records. Diagnostics cannot extend check-in timing or block model results. Batches lost before reaching the server have no backend diagnostic record; the phone's streaming status and attempted upload byte counter help identify those failures.
+
+After a house test, before ending the session, select **Copy motion diagnostics** on the Vivo and paste the JSON for analysis. For guardian AR registration, run the iPhone build attached to Xcode/Flutter and retain the existing `[KAZE AR]` startup and closure lines. Camera logs omit credentials and coordinates; successful indoor alignment is not inferred from them.
+
 ## Private export and evaluation
 
 ```powershell

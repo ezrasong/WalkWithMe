@@ -381,3 +381,91 @@ test('motion sharing withdrawal while inference yields cannot restore retained e
  finish({captureStartedUtcMs:f.time(),stream:{}});
  assert.equal((await pending).body.retained,false);assert.equal(f.app.store.motion(s.id),null);
 });
+
+test('confirmed simulated filming take repeats countdown, stops at alert time and preserves guardian pairing',async t=>{
+ const f=await fixture(t),s=await sharedDemo(f),root=`/api/sessions/${s.id}`;
+ const control=body=>f.request(`${root}/demo-walk`,{token:s.ownerToken,body});
+ await control({command:'start',consent:true,route:demoRoute});await control({command:'speed',speed:4});
+ assert.equal((await control({command:'begin-take'})).status,400);
+ for(const token of [s.guardianToken,s.watchToken])assert.equal((await f.request(`${root}/demo-walk`,{token,body:{command:'begin-take',confirm:true}})).status,401);
+ const before=await f.request(root,{token:s.ownerToken});
+ const take=(await control({command:'begin-take',confirm:true})).body;
+ assert.equal(take.dueAt,f.time()+30000);assert.equal(take.graceSeconds,10);assert.equal(take.demoWalk.speed,1);assert.equal(take.demoWalk.distance,0);
+ assert.equal(take.expiresAt,before.body.expiresAt);
+ f.jump(30000);let g=(await f.request(root,{token:s.guardianToken})).body;
+ assert.equal(g.phase,'challenge');assert.equal(g.demoWalk.distance,36);
+ f.jump(10000);g=(await f.request(root,{token:s.guardianToken})).body;
+ assert.equal(g.phase,'alert');assert.equal(g.demoWalk.distance,48);assert.equal(g.demoWalk.running,false);
+ await f.request(`${root}/acknowledge`,{token:s.guardianToken,body:{confirm:true}});
+ await f.request(`${root}/arrived`,{token:s.guardianToken,body:{confirm:true}});
+ f.jump(60000);assert.equal((await f.request(root,{token:s.guardianToken})).body.demoWalk.distance,48);
+ const ar=(await f.request(`${root}/ar`,{token:s.guardianToken})).body;assert.equal(ar.available,true);assert.equal(ar.simulated,true);
+ const again=(await control({command:'begin-take',confirm:true})).body;
+ assert.equal(again.phase,'armed');assert.equal(again.demoWalk.distance,0);assert.notEqual(again.demoWalk.runId,take.demoWalk.runId);
+ for(const key of ['acknowledgedAt','arrivalReportedAt','escalatedAt','alertSeenAt'])assert.equal(again[key],undefined);
+ assert.equal((await f.request(root,{token:s.guardianToken})).status,200);
+ assert.equal(f.app.store.activity(s.id).filter(a=>a.action==='demo-take').length,2);
+});
+
+test('filming controls never reset real alerts or extend expiry, and delayed ticks stop the walk at forty seconds',async t=>{
+ const f=await fixture(t),real=await f.create(),s=await sharedDemo(f),root=`/api/sessions/${s.id}`;
+ f.jump(8000);const saved=f.app.store.get(real.id);
+ assert.equal((await f.request(`/api/sessions/${real.id}/demo-walk`,{token:real.ownerToken,body:{command:'begin-take',confirm:true}})).status,409);
+ assert.deepEqual(f.app.store.get(real.id),saved);
+ await f.request(`${root}/demo-walk`,{token:s.ownerToken,body:{command:'start',consent:true,route:demoRoute}});
+ await f.request(`${root}/demo-walk`,{token:s.ownerToken,body:{command:'begin-take',confirm:true}});
+ f.jump(120000);let g=(await f.request(root,{token:s.guardianToken})).body;
+ assert.equal(g.phase,'alert');assert.equal(g.demoWalk.distance,48);assert.equal(g.demoWalk.running,false);
+ const updated=f.app.store.get(s.id);f.app.store.save({...updated,expiresAt:f.time()+40000});
+ assert.equal((await f.request(`${root}/demo-walk`,{token:s.ownerToken,body:{command:'begin-take',confirm:true}})).status,409);
+ assert.equal(f.app.store.get(s.id).expiresAt,f.time()+40000);
+});
+
+test('motion diagnostics are consented, owner-only, sanitized, bounded and erased on withdrawal or expiry',async t=>{
+ let fail=false;
+ const f=await fixture(t,{motion:{close(){},async evaluate(){
+  if(fail)throw Object.assign(new Error('private raw details must not be logged'),{status:422,motionCode:'sampling-rate'});
+  return {captureStartedUtcMs:f.time(),estimatedDistanceMeters:1.2,
+   quality:{accel:{samples:2000,medianHz:199.9,maximumGapMs:6,gapsOver25ms:0,raw:'secret'}},
+   performance:{device:'cpu',inferenceSeconds:.05,windows:20},segments:[[{vx:0,vy:0,stationary:true}]],
+   token:'secret',latitude:43,name:'Private wearer',rawSamples:[9,8,7]};
+ }}});
+ const s=await f.create(),root=`/api/sessions/${s.id}`,url=root+'/motion-diagnostics';
+ const send=()=>f.request(root+'/motion',{token:s.ownerToken,body:motionBatch,headers:motionHeaders});
+ const consent=enabled=>f.request(url,{token:s.ownerToken,body:{enabled,confirm:true}});
+ assert.equal((await send()).body.diagnosticsRecorded,false);assert.deepEqual(f.app.store.motionDiagnostics(s.id),[]);
+ for(const token of [s.guardianToken,s.watchToken,undefined]) {
+  assert.equal((await f.request(url,{token})).status,401);
+  assert.equal((await f.request(url,{token,body:{enabled:true,confirm:true}})).status,401);
+ }
+ assert.equal((await f.request(url,{token:s.ownerToken,body:{enabled:true}})).status,400);
+ await consent(true);f.jump(8000);assert.equal((await send()).body.diagnosticsRecorded,true);
+ let records=(await f.request(url,{token:s.ownerToken})).body.records;
+ assert.equal(records.length,1);assert.equal(records[0].quality.accel.medianHz,199.9);assert.equal(records[0].prediction.stationaryWindows,1);
+ assert.equal(records[0].inference.device,'cpu');
+ for(const word of ['secret','latitude','Private wearer','rawSamples'])assert.ok(!JSON.stringify(records).includes(word));
+ assert.equal((await f.request(root,{token:s.guardianToken})).body.records,undefined);
+ fail=true;f.jump(8000);assert.equal((await send()).status,422);
+ records=(await f.request(url,{token:s.ownerToken})).body.records;assert.equal(records.at(-1).code,'sampling-rate');
+ assert.ok(!JSON.stringify(records).includes('private raw details'));
+ for(let i=0;i<130;i++)f.app.store.appendMotionDiagnostic(s.id,{at:i,outcome:'test'});
+ assert.equal(f.app.store.motionDiagnostics(s.id).length,120);
+ await consent(false);assert.deepEqual(f.app.store.motionDiagnostics(s.id),[]);
+ await consent(true);f.app.store.appendMotionDiagnostic(s.id,{at:f.time()});
+ f.jump(8*3600000);assert.equal((await f.request(url,{token:s.ownerToken})).status,401);assert.deepEqual(f.app.store.motionDiagnostics(s.id),[]);
+});
+
+test('diagnostic withdrawal or session deletion during model work cannot recreate logs',async t=>{
+ let finish,started;let ready=new Promise(resolve=>started=resolve);
+ const f=await fixture(t,{motion:{close(){},evaluate(){started();return new Promise(resolve=>finish=resolve);}}});
+ const s=await f.create(),root=`/api/sessions/${s.id}`;
+ const consent=enabled=>f.request(root+'/motion-diagnostics',{token:s.ownerToken,body:{enabled,confirm:true}});
+ await consent(true);
+ let pending=f.request(root+'/motion',{token:s.ownerToken,body:motionBatch,headers:motionHeaders});await ready;
+ await consent(false);await consent(true);finish({captureStartedUtcMs:f.time(),segments:[]});
+ assert.equal((await pending).body.diagnosticsRecorded,false);assert.deepEqual(f.app.store.motionDiagnostics(s.id),[]);
+ f.jump(8000);ready=new Promise(resolve=>started=resolve);
+ pending=f.request(root+'/motion',{token:s.ownerToken,body:motionBatch,headers:motionHeaders});await ready;
+ await f.request(root,{token:s.ownerToken,method:'DELETE'});finish({captureStartedUtcMs:f.time(),segments:[]});
+ assert.equal((await pending).status,404);assert.deepEqual(f.app.store.motionDiagnostics(s.id),[]);
+});

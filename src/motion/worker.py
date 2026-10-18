@@ -84,7 +84,12 @@ def main():
             print(json.dumps({'result': result}, allow_nan=False), flush=True)
         except (ValueError, KeyError, TypeError, OSError, EOFError) as error:
             # Do not emit raw samples or request contents in errors/logs.
-            print(json.dumps({'error': 'Motion batch rejected: unsupported or incomplete sensor data.'}), flush=True)
+            reason = str(error)
+            code = ('sampling-rate' if 'sample rate' in reason else
+                'insufficient-coverage' if 'continuous windows' in reason or 'overlapping motion' in reason else
+                'resource-limit' if 'exceeds' in reason else
+                'stream-clock' if 'stream' in reason.lower() or 'UTC mapping' in reason else 'invalid-sensor-data')
+            print(json.dumps({'error': 'Motion batch rejected: unsupported or incomplete sensor data.', 'code': code}), flush=True)
         finally:
             # Do not keep the previous raw request while waiting for the next batch.
             line = None

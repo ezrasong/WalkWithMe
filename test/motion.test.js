@@ -47,7 +47,7 @@ test('actual stream estimates pass through HTTP to the authorized shared preview
   const res=await fetch(base+route,{method:body?'POST':'GET',headers:{...(token?{Authorization:`Bearer ${token}`} : {}),'Content-Type':'application/json',...headers},body:body?Buffer.isBuffer(body)?body:JSON.stringify(body):undefined});
   return {status:res.status,body:await res.json()};
  };
- const created=await request('/api/sessions',null,{consent:true,simulation:true,name:'Motion integration',motionSharingConsent:true,intervalSeconds:5,graceSeconds:3});
+ const created=await request('/api/sessions',null,{consent:true,simulation:true,name:'Motion integration',motionSharingConsent:true,motionDiagnosticsConsent:true,intervalSeconds:5,graceSeconds:3});
  const s=created.body,url=`/api/sessions/${s.id}`;
  function payload(from,to,seq){
   const ns=1000000000;
@@ -61,7 +61,7 @@ test('actual stream estimates pass through HTTP to the authorized shared preview
  }
  const headers={'Content-Type':'application/gzip','X-Kaze-Motion-Consent':'1'};
  const first=await request(`${url}/motion`,s.ownerToken,payload(0,2.5,0),headers);
- assert.equal(first.status,200);assert.equal(first.body.retained,true);
+ assert.equal(first.status,200);assert.equal(first.body.retained,true);assert.equal(first.body.diagnosticsRecorded,true);
  assert.equal((await request(url,s.guardianToken)).body.relativeMotion,null);
  clock+=8000;
  assert.equal((await request(`${url}/motion`,s.ownerToken,payload(1.2,4,1),headers)).status,200);
@@ -71,4 +71,9 @@ test('actual stream estimates pass through HTTP to the authorized shared preview
  assert.equal(g.relativeMotion.guidanceAllowed,false);assert.equal(app.store.events(s.id).length,0);
  const ar=(await request(`${url}/ar`,s.guardianToken)).body;
  assert.equal(ar.available,false);assert.equal(ar.relativeMotion.available,true);
+ const log=await request(`${url}/motion-diagnostics`,s.ownerToken);
+ assert.equal(log.status,200);assert.equal(log.body.records.length,2);
+ assert.equal(log.body.records[0].inference.device,'cpu');assert.ok(log.body.records[0].prediction.stationaryWindows>0);
+ assert.ok(log.body.records[0].quality.accel.medianHz>180);
+ assert.ok(!JSON.stringify(log.body).includes('ownerToken'));
 });

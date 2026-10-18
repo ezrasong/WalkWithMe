@@ -181,7 +181,7 @@ class _SessionScreenState extends State<SessionScreen>
       pairingCode = TextEditingController();
   int tab = 0, interval = 120, grace = 30;
   int setupRole = Platform.isAndroid ? 0 : 1;
-  bool consent = false, live = false, tiles = true;
+  bool consent = false, live = false, tiles = true, showDemoControls = true;
   Timer? clock;
   String lastMessage = '';
   bool get transientMessage => const [
@@ -194,7 +194,20 @@ class _SessionScreenState extends State<SessionScreen>
     WidgetsBinding.instance.addObserver(this);
     c.addListener(update);
     c.restore().then((_) => offerDeviceSetup());
+    c.storage
+        .read(key: 'showDemoControls')
+        .then((value) {
+          if (mounted) setState(() => showDemoControls = value != 'false');
+        })
+        .catchError((Object _) {});
     clock = Timer.periodic(const Duration(seconds: 1), (_) => update());
+  }
+
+  void setDemoControls(bool visible) {
+    setState(() => showDemoControls = visible);
+    c.storage
+        .write(key: 'showDemoControls', value: visible.toString())
+        .catchError((Object _) {});
   }
 
   Future<void> offerDeviceSetup() async {
@@ -368,19 +381,27 @@ class _SessionScreenState extends State<SessionScreen>
         icon: const Icon(Icons.settings_suggest_outlined),
         label: const Text('Permissions & background setup'),
       ),
-      OutlinedButton.icon(
-        onPressed: () => openGuardianCamera(GuardianAr(session: c, demo: true)),
-        icon: const Icon(Icons.view_in_ar),
-        label: const Text('Local camera animation'),
+      TextButton.icon(
+        onPressed: () => setDemoControls(!showDemoControls),
+        icon: const Icon(Icons.movie_outlined),
+        label: Text(showDemoControls ? 'Hide demo tools' : 'Show demo tools'),
       ),
-      FilledButton.icon(
-        onPressed: c.busy ? null : startSharedDemo,
-        icon: const Icon(Icons.directions_walk),
-        label: const Text('Start shared walking demo'),
-      ),
-      note(
-        'Demo movement is simulated and shared with your paired guardian. The map and guardian camera use the same route. No real wearer recording starts.',
-      ),
+      if (showDemoControls) ...[
+        OutlinedButton.icon(
+          onPressed: () =>
+              openGuardianCamera(GuardianAr(session: c, demo: true)),
+          icon: const Icon(Icons.view_in_ar),
+          label: const Text('Local camera animation'),
+        ),
+        FilledButton.icon(
+          onPressed: c.busy ? null : startSharedDemo,
+          icon: const Icon(Icons.directions_walk),
+          label: const Text('Start shared walking demo'),
+        ),
+        note(
+          'Demo movement is simulated and shared with your paired guardian. The map and guardian camera use the same route. No real wearer recording starts.',
+        ),
+      ],
       if (Platform.isAndroid) arPrivacyNotice(),
       const SizedBox(height: 20),
       if (Platform.isAndroid)
@@ -474,7 +495,7 @@ class _SessionScreenState extends State<SessionScreen>
             value: consent,
             onChanged: (v) => setState(() => consent = v!),
             title: const Text(
-              'I agree to record this session on my phone and paired watch, send compressed phone motion over Wi-Fi or cellular for research trail estimates, retain a bounded relative trail, and share it after nonresponse with my chosen guardian. Room, floor and camera alignment can remain unknown. Motion streaming can be stopped in Settings. Data expires after 8 hours.',
+              'I agree to record this session on my phone and paired watch, send compressed phone motion over Wi-Fi or cellular for research trail estimates, retain a bounded relative trail and owner-only motion diagnostics, and share the trail after nonresponse with my chosen guardian. Room, floor and camera alignment can remain unknown. Motion streaming can be stopped in Settings. Data expires after 8 hours.',
             ),
           ),
           CheckboxListTile.adaptive(
@@ -657,7 +678,7 @@ class _SessionScreenState extends State<SessionScreen>
           onPressed: showSessionDetails,
           child: const Text('Pocket motion trail & camera'),
         ),
-      if (s['demoWalk'] != null)
+      if (showDemoControls && s['demoWalk'] != null)
         OutlinedButton(
           onPressed: showSessionDetails,
           child: const Text('Demo walk controls & camera'),
@@ -888,6 +909,16 @@ class _SessionScreenState extends State<SessionScreen>
         const Text(
           'Generated positions, not a real person. This route is shared with the guardian.',
         ),
+        if (!c.guardian) ...[
+          FilledButton.icon(
+            onPressed: c.busy ? null : () => c.controlDemo('begin-take'),
+            icon: const Icon(Icons.movie_outlined),
+            label: const Text('Start 40-second alert take'),
+          ),
+          const Text(
+            'SIMULATED: restarts the walk at 1x. Check-in is due after 30 seconds; after 10 more seconds without a response, the alert appears and the virtual wearer stops. The guardian can approach that position. Starting another take resets only this demo’s countdown and responses.',
+          ),
+        ],
         if (!c.guardian)
           Wrap(
             spacing: 8,
@@ -1047,7 +1078,8 @@ class _SessionScreenState extends State<SessionScreen>
                     label: const Text('Camera direction preview'),
                   ),
               ],
-              if (s['demoWalk'] != null) sharedDemoControls(),
+              if (showDemoControls && s['demoWalk'] != null)
+                sharedDemoControls(),
               const Divider(height: 24),
               Text(
                 'Connection',
@@ -1085,6 +1117,7 @@ class _SessionScreenState extends State<SessionScreen>
       'arrived': 'Guardian reported arrival · not verified',
       'resolve': 'Session ended',
       'revoke-guardian': 'Guardian access revoked',
+      'demo-take': 'Simulated alert take restarted',
     };
     final activity = c.snapshot?['activity'] as List? ?? [];
     return ListView(
@@ -1153,14 +1186,26 @@ class _SessionScreenState extends State<SessionScreen>
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
       children: [
+        section('Presentation', [
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Show demo tools'),
+            subtitle: const Text(
+              'Hide demo launch and playback controls from the welcome screen, map and session details. Filming controls remain here in Settings. Generated positions keep their DEMO labels.',
+            ),
+            value: showDemoControls,
+            onChanged: setDemoControls,
+          ),
+        ]),
         section('Device setup', [
           if (Platform.isAndroid) arPrivacyNotice(),
-          action(
-            Icons.view_in_ar,
-            'Local camera animation',
-            () => openGuardianCamera(GuardianAr(session: c, demo: true)),
-            subtitle: 'A local virtual wearer and camera trail. No GPS or live alert required.',
-          ),
+          if (showDemoControls)
+            action(
+              Icons.view_in_ar,
+              'Local camera animation',
+              () => openGuardianCamera(GuardianAr(session: c, demo: true)),
+              subtitle: 'A local virtual wearer and camera trail. No GPS or live alert required.',
+            ),
           action(
             Icons.settings_suggest_outlined,
             'Permissions & background setup',

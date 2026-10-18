@@ -10,10 +10,17 @@ export class Store {
         PRIMARY KEY(session_id,id), UNIQUE(session_id,source,seq));
       CREATE TABLE IF NOT EXISTS activity(session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
         at REAL NOT NULL, action TEXT NOT NULL, role TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS motion_diagnostics(session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE, body TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS motion_state(session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE, body TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS guardian_push(session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
         registration_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(session_id,registration_id));`);
   }
+  motionDiagnostics(id) { const row = this.db.prepare('SELECT body FROM motion_diagnostics WHERE session_id=?').get(id); return row ? JSON.parse(row.body) : []; }
+  appendMotionDiagnostic(id, record) {
+    const records = [...this.motionDiagnostics(id), record].slice(-120);
+    this.db.prepare('INSERT INTO motion_diagnostics VALUES (?,?) ON CONFLICT(session_id) DO UPDATE SET body=excluded.body').run(id, JSON.stringify(records));
+  }
+  clearMotionDiagnostics(id) { this.db.prepare('DELETE FROM motion_diagnostics WHERE session_id=?').run(id); }
   motion(id) { const row = this.db.prepare('SELECT body FROM motion_state WHERE session_id=?').get(id); return row ? JSON.parse(row.body) : null; }
   saveMotion(id, state) { this.db.prepare('INSERT INTO motion_state VALUES (?,?) ON CONFLICT(session_id) DO UPDATE SET body=excluded.body').run(id, JSON.stringify(state)); }
   clearMotion(id) { this.db.prepare('DELETE FROM motion_state WHERE session_id=?').run(id); }
@@ -37,7 +44,7 @@ export class Store {
   remove(id) { this.db.prepare('DELETE FROM sessions WHERE id=?').run(id); }
   recordActivity(id, action, at, role) { this.db.prepare('INSERT INTO activity VALUES(?,?,?,?)').run(id, at, action, role); }
   activity(id) { return this.db.prepare('SELECT at,action,role FROM activity WHERE session_id=? ORDER BY at,rowid').all(id); }
-  clearEvents(id) { this.clearMotion(id); this.db.prepare('DELETE FROM events WHERE session_id=?').run(id); this.db.prepare('DELETE FROM activity WHERE session_id=?').run(id); }
+  clearEvents(id) { this.clearMotion(id); this.clearMotionDiagnostics(id); this.db.prepare('DELETE FROM events WHERE session_id=?').run(id); this.db.prepare('DELETE FROM activity WHERE session_id=?').run(id); }
   guardianPushes() { return this.db.prepare('SELECT body FROM guardian_push').all().map(r => JSON.parse(r.body)); }
   guardianPush(sessionId, registrationId) {
     const row = this.db.prepare('SELECT body FROM guardian_push WHERE session_id=? AND registration_id=?').get(sessionId, registrationId);

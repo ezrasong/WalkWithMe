@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
 
 import 'package:flutter/material.dart';
 
@@ -90,6 +93,39 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
     }
   }
 
+  Future<void> diagnostics({bool? enabled}) async {
+    if (!authorized || busy) return;
+    setState(() => busy = true);
+    try {
+      final result = await widget.session.api(
+        action: 'motion-diagnostics',
+        body: enabled == null ? null : {'enabled': enabled, 'confirm': true},
+      );
+      if (!mounted || !authorized) return;
+      if (enabled == null) {
+        await Clipboard.setData(
+          ClipboardData(
+            text: const JsonEncoder.withIndent('  ').convert(result),
+          ),
+        );
+        if (mounted) {
+          setState(
+            () => message =
+                'Owner-only diagnostic log copied. Paste it for analysis.',
+          );
+        }
+      } else {
+        await widget.session.refresh();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => message = 'Diagnostic request was not confirmed.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> run(String method) async {
     if (!authorized || busy) return;
     setState(() {
@@ -163,6 +199,21 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
             ),
             value: widget.session.snapshot?['motionSharingConsent'] == true,
             onChanged: authorized && !busy ? consent : null,
+          ),
+          SwitchListTile(
+            title: const Text('Keep owner-only motion diagnostics'),
+            subtitle: const Text(
+              'Keep the latest 120 batch summaries until session expiry: sampling, model timing, stationary decisions, gaps and watch checks. Raw samples, geographic coordinates and credentials are excluded. Turning off deletes these logs.',
+            ),
+            value: widget.session.snapshot?['motionDiagnosticsConsent'] == true,
+            onChanged: authorized && !busy
+                ? (value) => diagnostics(enabled: value)
+                : null,
+          ),
+          OutlinedButton.icon(
+            onPressed: authorized && !busy ? () => diagnostics() : null,
+            icon: const Icon(Icons.copy_all_outlined),
+            label: const Text('Copy motion diagnostics'),
           ),
           RelativeMotionCard(
             motion: widget.session.snapshot?['relativeMotion'] as Map?,

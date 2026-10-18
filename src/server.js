@@ -12,8 +12,9 @@ import { guardianArTrail } from './ar.js';
 import { applePushFromEnv, GuardianPushDelivery } from './apple-push.js';
 import { MotionEvaluator } from './motion.js';
 import { appendMotion, relativeMotion } from './motion-trail.js';
+import { motionDiagnostic } from './motion-diagnostics.js';
 import { GuardianInvites } from './guardian-invites.js';
-import { advanceDemo, controlDemo, demoEvents } from './demo-walk.js';
+import { advanceDemo, controlDemo, demoEvents, beginDemoTake } from './demo-walk.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, applePush = null, motion = new MotionEvaluator() } = {}) {
@@ -106,7 +107,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
         const intervalSeconds = number(b.intervalSeconds ?? 120, 5, 3600, 'check-in interval');
         if (b.liveSharing === true && b.liveSharingConsent !== true) throw new Problem(400, 'Live sharing requires separate explicit consent');
         const s = { id: randomUUID(), name: label(b.name, 60, 'name'), origin: label(b.origin ?? 'Location services', 100, 'entrance'), simulation: true,
-          liveSharing: b.liveSharing === true, motionSharingConsent: b.motionSharingConsent === true, motionConsentGeneration: 0,
+          liveSharing: b.liveSharing === true, motionSharingConsent: b.motionSharingConsent === true, motionConsentGeneration: 0, motionDiagnosticsConsent: b.motionDiagnosticsConsent === true,
           sensorMode: b.sensorMode === 'simulated' ? 'simulated' : 'device',
           createdAt: now(), expiresAt: now() + number(b.retentionHours ?? 8, 0.01, 24, 'retention') * 3600000,
           phase: 'armed', intervalSeconds, graceSeconds: number(b.graceSeconds ?? 30, 3, 300, 'grace period'),
@@ -114,7 +115,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           initialHeading: number(b.initialHeading ?? 0, 0, 360, 'initial heading'), ownerHash: hash(owner), guardianHash: hash(guardian), watchHash: hash(watch) };
         store.save(s); store.recordActivity(s.id, 'started', now(), 'owner'); return json(201, { ...snapshot(s, 'owner'), ownerToken: owner, guardianToken: guardian, watchToken: watch });
       }
-      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push|guardian-invite|motion|motion-consent|demo-walk))?$/.exec(url.pathname);
+      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push|guardian-invite|motion|motion-consent|motion-diagnostics|demo-walk))?$/.exec(url.pathname);
       if (match) {
         const id = match[1], action = match[2]; let s = current(id);
         if (action === 'guardian-invite') {
@@ -148,6 +149,17 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           return json(200, { id: s.id, role: 'guardian', phase: s.phase,
             serverNow: now(), expiresAt: s.expiresAt, acknowledgedAt: s.acknowledgedAt ?? null });
         }
+        if (action === 'motion-diagnostics') {
+          auth(req, s, ['owner']);
+          if (req.method === 'GET') return json(200, { version: 1, enabled: !!s.motionDiagnosticsConsent, records: store.motionDiagnostics(id) });
+          if (req.method !== 'POST') throw new Problem(405, 'Method not allowed');
+          const b = await body(req); s = current(id); auth(req, s, ['owner']);
+          if (s.phase === 'resolved' || s.sensorMode !== 'device') throw new Problem(409, 'Active device session required');
+          if (typeof b.enabled !== 'boolean' || b.confirm !== true) throw new Problem(400, 'Explicit diagnostic retention consent required');
+          s.motionDiagnosticsConsent = b.enabled; s.motionConsentGeneration = (s.motionConsentGeneration ?? 0) + 1;
+          store.transaction(() => { store.save(s); if (!b.enabled) store.clearMotionDiagnostics(id); });
+          return json(200, snapshot(s, 'owner'));
+        }
         if (action === 'motion-consent') {
           auth(req, s, ['owner']);
           if (req.method !== 'POST') throw new Problem(405, 'Method not allowed');
@@ -172,14 +184,34 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           if (motionLimits.has(id) && now() - motionLimits.get(id) < 8000) throw new Problem(429, 'Send motion batches at most once per eight seconds');
           motionLimits.set(id, now());
           const consentGeneration = s.motionConsentGeneration ?? 0;
-          const result = await motion.evaluate(compressed.toString('base64'));
-          // Evaluation yields. Ending/deleting/expiring the session invalidates the result too.
-          s = current(id); auth(req, s, ['owner']);
-          if (s.phase === 'resolved') throw new Problem(409, 'Session has ended');
-          number(result?.captureStartedUtcMs, Math.max(s.createdAt - 5000, now() - 60000), now() + 5000, 'motion batch time');
-          if (s.motionSharingConsent && consentGeneration === (s.motionConsentGeneration ?? 0) && result.stream)
-            store.saveMotion(id, appendMotion(store.motion(id), result, now()));
-          return json(200, { accepted: true, serverNow: now(), result, retained: !!s.motionSharingConsent && consentGeneration === (s.motionConsentGeneration ?? 0) && !!result.stream });
+          const started = performance.now();
+          const record = (session, result, error = null) => {
+            if (!session.motionDiagnosticsConsent || consentGeneration !== (session.motionConsentGeneration ?? 0)) return false;
+            try {
+              const state = error ? null : store.motion(id);
+              const activity = state ? relativeMotion(state, store.events(id), now()).segments.at(-1)?.activity : null;
+              store.appendMotionDiagnostic(id, motionDiagnostic(result, { at: now(), bytes: compressed.length, processingMs: performance.now() - started, error, state, activity }));
+              return true;
+            } catch { return false; } // Diagnostics never block recording or session control.
+          };
+          try {
+            const result = await motion.evaluate(compressed.toString('base64'));
+            // Inference yields. Recheck authorization, expiry and both consent gates.
+            s = current(id); auth(req, s, ['owner']);
+            if (s.phase === 'resolved') throw new Problem(409, 'Session has ended');
+            number(result?.captureStartedUtcMs, Math.max(s.createdAt - 5000, now() - 60000), now() + 5000, 'motion batch time');
+            if (s.motionSharingConsent && consentGeneration === (s.motionConsentGeneration ?? 0) && result.stream)
+              store.saveMotion(id, appendMotion(store.motion(id), result, now()));
+            const diagnosticsRecorded = record(s, result);
+            return json(200, { accepted: true, serverNow: now(), result, diagnosticsRecorded,
+              retained: !!s.motionSharingConsent && consentGeneration === (s.motionConsentGeneration ?? 0) && !!result.stream });
+          } catch (error) {
+            try {
+              const latest = current(id); auth(req, latest, ['owner']);
+              if (latest.phase !== 'resolved') record(latest, null, error);
+            } catch { /* Ended, deleted, expired or revoked results cannot restore logs. */ }
+            throw error;
+          }
         }
         if (action === 'ar') {
           auth(req, s, ['owner', 'guardian']);
@@ -203,6 +235,11 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           if (action === 'pair') return json(200, { id, watchToken: b.rotate === true ? (() => { const next = token(); s.watchHash = hash(next); store.save(s); return next; })() : null });
           if (['resolved'].includes(s.phase)) throw new Problem(409, 'Session has ended');
           if (action === 'demo-walk') {
+            if (b.command === 'begin-take') {
+              s = beginDemoTake(s, b, now());
+              store.transaction(() => { store.save(s); store.recordActivity(id, 'demo-take', now(), role); });
+              return json(200, snapshot(s, role));
+            }
             const demoWalk = controlDemo(s, b, now());
             s.demoWalk = demoWalk;
             store.save(s);

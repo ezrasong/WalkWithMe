@@ -492,6 +492,7 @@ class SessionController extends ChangeNotifier {
         'simulation': true,
         'sensorMode': 'device',
         'motionSharingConsent': true,
+        'motionDiagnosticsConsent': true,
         'intervalSeconds': interval,
         'graceSeconds': grace,
         'liveSharing': live,
@@ -575,7 +576,11 @@ class SessionController extends ChangeNotifier {
     }
     snapshot = await api(
       action: 'demo-walk',
-      body: {'command': command, 'speed': ?speed},
+      body: {
+        'command': command,
+        'speed': ?speed,
+        if (command == 'begin-take') 'confirm': true,
+      },
     );
     received = DateTime.now();
   });

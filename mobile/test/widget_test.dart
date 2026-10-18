@@ -111,6 +111,9 @@ void main() {
       expect(bodies[1]['command'], 'start');
       await controller.controlDemo('pause');
       expect(controller.snapshot?['demoWalk']?['running'], false);
+      await controller.controlDemo('begin-take');
+      expect(bodies.last['command'], 'begin-take');
+      expect(bodies.last['confirm'], true);
       expect(calls, isNot(contains('start')));
       expect(calls, isNot(contains('permissions')));
     },
@@ -253,6 +256,37 @@ void main() {
       );
       expect(find.textContaining('No location received'), findsOneWidget);
       expect(find.byIcon(Icons.person_pin_circle), findsNothing);
+    },
+  );
+  testWidgets(
+    'demo launch controls can be hidden and the preference survives reopening',
+    (tester) async {
+      FlutterSecureStorage.setMockInitialValues({'deviceSetupSeenV1': 'true'});
+      await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Hide demo tools'));
+      await tester.tap(find.text('Hide demo tools'));
+      await tester.pumpAndSettle();
+      expect(find.text('Start shared walking demo'), findsNothing);
+      expect(find.text('Local camera animation'), findsNothing);
+      expect(
+        await const FlutterSecureStorage().read(key: 'showDemoControls'),
+        'false',
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
+      await tester.pumpAndSettle();
+      expect(find.text('Show demo tools'), findsOneWidget);
+      expect(find.text('Start shared walking demo'), findsNothing);
+      await tester.ensureVisible(find.text('Show demo tools'));
+      await tester.tap(find.text('Show demo tools'));
+      await tester.pumpAndSettle();
+      expect(find.text('Start shared walking demo'), findsOneWidget);
+      expect(
+        await const FlutterSecureStorage().read(key: 'showDemoControls'),
+        'true',
+      );
+      await tester.pumpWidget(const SizedBox());
     },
   );
 }

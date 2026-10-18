@@ -37,7 +37,7 @@ export class MotionEvaluator {
           const value = JSON.parse(line), pending = this.pending;
           if (!pending) return this.fail();
           this.pending = null; clearTimeout(pending.timer);
-          if (value.error) pending.reject(new Problem(422, value.error));
+          if (value.error) pending.reject(Object.assign(new Problem(422, value.error), { motionCode: value.code }));
           else pending.resolve(value.ready ? true : value.result);
         } catch { this.fail(); }
       }

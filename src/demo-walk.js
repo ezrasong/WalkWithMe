@@ -18,7 +18,8 @@ export function demoPoint(walk, distance) {
 
 export function advanceDemo(walk, now) {
   if (!walk?.running || now <= walk.updatedAt) return walk;
-  const distance = Math.min(walk.total, walk.distance + (now - walk.updatedAt) / 1000 * 1.2 * walk.speed);
+  const until = Math.min(now, walk.stopAt ?? now);
+  const distance = Math.min(walk.total, walk.distance + (until - walk.updatedAt) / 1000 * 1.2 * walk.speed);
   // Sample metre crossings and every route corner, so turns never cut across
   // a property. A full run is bounded to 2 km and needs no client timer.
   let length = 0;
@@ -29,7 +30,7 @@ export function advanceDemo(walk, now) {
   ])].sort((a, b) => a - b);
   const samples = [...walk.samples, ...crossings.map(d => ({ distance: d,
     at: walk.updatedAt + (d - walk.distance) / (1.2 * walk.speed) * 1000 }))];
-  return { ...walk, samples, distance, updatedAt: now, running: distance < walk.total };
+  return { ...walk, samples, distance, updatedAt: now, running: distance < walk.total && (walk.stopAt == null || now < walk.stopAt) };
 }
 
 export function controlDemo(session, body, now) {
@@ -45,13 +46,14 @@ export function controlDemo(session, body, now) {
     const total = lengths.reduce((sum, d) => sum + d, 0);
     if (lengths.some(d => d < .5) || total < 10 || total > 2000) throw new Problem(400, 'Demo route must span 10-2000 metres with distinct points');
     walk = { runId: randomUUID(), route, total, distance: 0, speed: 1,
-      running: true, updatedAt: now, samples: [{ distance: 0, at: now }] };
+      running: true, stopAt: null, updatedAt: now, samples: [{ distance: 0, at: now }] };
   } else {
     if (!walk) throw new Problem(409, 'Start a demo route first');
     if (body.command === 'pause') walk = { ...walk, running: false };
-    else if (body.command === 'resume') walk = { ...walk, running: walk.distance < walk.total, updatedAt: now };
+    else if (body.command === 'resume') walk = { ...walk, running: walk.distance < walk.total, updatedAt: now,
+      stopAt: walk.stopAt != null && now >= walk.stopAt ? null : walk.stopAt };
     else if (body.command === 'restart') walk = { ...walk, runId: randomUUID(), distance: 0,
-      running: true, updatedAt: now, samples: [{ distance: 0, at: now }] };
+      running: true, stopAt: null, updatedAt: now, samples: [{ distance: 0, at: now }] };
     else if (body.command === 'speed' && [1, 2, 4].includes(body.speed)) walk = { ...walk, speed: body.speed };
     else throw new Problem(400, 'Invalid demo control');
   }
@@ -65,4 +67,17 @@ export function demoEvents(walk, now) {
   return samples.map((p, i) => ({ id: `demo-${walk.runId}-${i}`, seq: i, type: 'gps', source: 'phone',
     at: p.at, fixAt: p.at, ...demoPoint(walk, p.distance), accuracy: 1,
     provider: 'kaze-demo', provenance: 'unknown', mock: true, simulated: true }));
+}
+
+// Only this explicitly confirmed simulated scenario resets a countdown. Normal
+// movement controls and real wearer sessions never re-arm an assistance request.
+export function beginDemoTake(session, body, now) {
+  if (session.sensorMode !== 'simulated' || !session.demoWalk || ['resolved', 'expired'].includes(session.phase))
+    throw new Problem(409, 'Start an active shared walking demo first');
+  if (body.confirm !== true) throw new Problem(400, 'Confirm restarting the simulated walk and alert countdown');
+  if (session.expiresAt <= now + 40000) throw new Problem(409, 'Demo expires too soon; start a new demo session');
+  const result = { ...session, phase: 'armed', intervalSeconds: 30, graceSeconds: 10, dueAt: now + 30000,
+    demoWalk: { ...controlDemo(session, { command: 'restart' }, now), speed: 1, stopAt: now + 40000 } };
+  for (const key of ['escalatedAt', 'acknowledgedAt', 'arrivalReportedAt', 'alertSeenAt', 'lastCheckInAt']) delete result[key];
+  return result;
 }

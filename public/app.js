@@ -74,7 +74,7 @@ function render() {
   $('demo-controls').hidden=guardian||state.sensorMode!=='simulated'||state.phase==='resolved';
   $('guardian-status').textContent=state.guardianConnected?'Guardian page recently connected. This does not prove anyone is watching.':'Guardian page not recently connected. No push, calls or SMS are configured.';
   $('sources').replaceChildren(...['phone','watch'].map(source=>{const p=document.createElement('p');p.textContent=`${source==='phone'?'Phone':'Watch'} connection: ${ago(state.sources[source]?.lastAt)}`;return p;}));
-  const labels={started:'Session started',challenge:'Check-in due',alert:'Assistance requested after nonresponse','check-in':'Check-in accepted by server',acknowledge:'Guardian acknowledged (help not verified)',arrived:'Guardian reported arrival (not verified)',resolve:'Session ended','revoke-guardian':'Guardian access revoked'};
+  const labels={started:'Session started',challenge:'Check-in due',alert:'Assistance requested after nonresponse','check-in':'Check-in accepted by server',acknowledge:'Guardian acknowledged (help not verified)',arrived:'Guardian reported arrival (not verified)',resolve:'Session ended','revoke-guardian':'Guardian access revoked','demo-take':'Simulated alert take restarted'};
   $('activity').replaceChildren(...(state.activity??[]).map(a=>{const li=document.createElement('li');li.textContent=`${time(a.at)} · ${labels[a.action]??a.action} · ${a.role}`;return li;}));
   const height=state.trail?.elevations.find(e=>e.source==='watch')??state.trail?.elevations[0];
   $('height-status').textContent=height?`Relative pressure height: ${height.relativeMeters.toFixed(1)} m (${height.source}). Weather and pressure drift can affect this. Floor, room and stairs are unknown.`:'';
@@ -103,7 +103,7 @@ function begin() {poll();setInterval(poll,2000);setInterval(tick,500);}
 async function create(simulated=false) {
   const form=$('create-form');if(!form.reportValidity())return;
   const fields=Object.fromEntries(new FormData(form));
-  try { const response=await fetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fields.name,consent:true,simulation:true,motionSharingConsent:!simulated,sensorMode:simulated?'simulated':'device',intervalSeconds:simulated?15:Number(fields.intervalSeconds),graceSeconds:simulated?5:Number(fields.graceSeconds),liveSharing:$('live-sharing').checked,liveSharingConsent:$('live-sharing').checked})});
+  try { const response=await fetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fields.name,consent:true,simulation:true,motionSharingConsent:!simulated,motionDiagnosticsConsent:!simulated,sensorMode:simulated?'simulated':'device',intervalSeconds:simulated?15:Number(fields.intervalSeconds),graceSeconds:simulated?5:Number(fields.graceSeconds),liveSharing:$('live-sharing').checked,liveSharingConsent:$('live-sharing').checked})});
     const data=await response.json();if(!response.ok)throw new Error(data.error);
     credentials={id:data.id,token:data.ownerToken,guardianToken:data.guardianToken,watchToken:data.watchToken};sessionStorage.setItem(key,JSON.stringify(credentials));begin();
   }catch(e){notify(e.message);}

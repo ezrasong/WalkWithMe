@@ -1,3 +1,8 @@
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kaze/motion_capture.dart';
@@ -173,6 +178,58 @@ void main() {
       await tester.pumpAndSettle();
       expect(calls, contains('stopMotionCapture'));
       expect(recording, false);
+      await close(tester);
+    },
+  );
+  testWidgets(
+    'owner exports diagnostics explicitly and a guardian cannot copy them',
+    (tester) async {
+      final previous = session;
+      final a = session.access;
+      final snapshot = session.snapshot;
+      previous.dispose();
+      String? copied;
+      var requests = 0;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = call.arguments['text'] as String;
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      session = SessionController(
+        client: MockClient((request) async {
+          requests++;
+          expect(request.method, 'GET');
+          expect(request.url.path, endsWith('/motion-diagnostics'));
+          return http.Response(
+            jsonEncode({
+              'enabled': true,
+              'records': [
+                {'outcome': 'processed', 'uploadBytes': 100},
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+      session.access = a;
+      session.snapshot = snapshot;
+      session.received = DateTime.now();
+      await open(tester);
+      await tester.ensureVisible(find.text('Copy motion diagnostics'));
+      await tester.tap(find.text('Copy motion diagnostics'));
+      await tester.pumpAndSettle();
+      expect(requests, 1);
+      expect(jsonDecode(copied!)['records'][0]['uploadBytes'], 100);
+      session.access = access('guardian');
+      session.changed();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Copy motion diagnostics'));
+      await tester.pumpAndSettle();
+      expect(requests, 1);
       await close(tester);
     },
   );
