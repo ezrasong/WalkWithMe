@@ -45,6 +45,8 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
   }
   function snapshot(s, role) {
     const { ownerHash, guardianHash, watchHash, demoWalk, ...safe } = s;
+    // Older generated sessions stored this presentation label as their name.
+    if (s.sensorMode === 'simulated' && safe.name === 'Virtual wearer (demo)') safe.name = 'Virtual wearer';
     const shared = role === 'owner' || (role === 'guardian' && !s.guardianRevokedAt && (s.phase === 'alert' || (s.liveSharing === true && ['armed', 'challenge'].includes(s.phase))));
     if (!shared) delete safe.origin;
     const events = shared ? [...store.events(s.id), ...demoEvents(demoWalk, now())] : [];

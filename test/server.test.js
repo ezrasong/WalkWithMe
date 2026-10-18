@@ -28,6 +28,17 @@ async function sharedDemo(f) {
  return (await f.request('/api/sessions',{body:{consent:true,simulation:true,sensorMode:'simulated',name:'Virtual wearer',
    liveSharing:true,liveSharingConsent:true,intervalSeconds:3600}})).body;
 }
+test('legacy generated names use current presentation wording without changing stored or real wearer names', async t => {
+ const f = await fixture(t);
+ for (const sensorMode of ['simulated', 'device']) {
+  const s = (await f.request('/api/sessions', {body:{consent:true,simulation:true,sensorMode,name:'Virtual wearer (demo)'}})).body;
+  for (const token of [s.ownerToken, s.guardianToken]) {
+   const current = (await f.request(`/api/sessions/${s.id}`, {token})).body;
+   assert.equal(current.name, sensorMode === 'simulated' ? 'Virtual wearer' : 'Virtual wearer (demo)');
+  }
+  assert.equal(f.app.store.get(s.id).name, 'Virtual wearer (demo)');
+ }
+});
 test('shared demo drives identical guardian map and AR evidence while retaining simulated provenance',async t=>{
  const f=await fixture(t),s=await sharedDemo(f),root=`/api/sessions/${s.id}`;
  const started=await f.request(`${root}/demo-walk`,{token:s.ownerToken,body:{command:'start',consent:true,route:demoRoute}});
