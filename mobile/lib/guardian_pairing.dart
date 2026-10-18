@@ -98,8 +98,27 @@ class _GuardianPairingScreenState extends State<GuardianPairingScreen>
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text(
-              'On their phone, open WalkWithMe → Join as guardian → Scan QR code. Or tell them the pairing code below.',
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xff173d86), Color(0xff0a1d43)],
+                ),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.people_alt_outlined, color: Colors.white),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      'On their phone, open WalkWithMe → Join as guardian → Scan QR code. Or tell them the pairing code below.',
+                      style: TextStyle(color: Color(0xffd7e1ff), height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
             if (loading) const Center(child: CircularProgressIndicator()),
@@ -107,14 +126,28 @@ class _GuardianPairingScreenState extends State<GuardianPairingScreen>
               Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 280),
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: QrImageView(
-                      data: current.qrData,
-                      backgroundColor: Colors.white,
-                      padding: const EdgeInsets.all(20),
-                      semanticsLabel:
-                          'Private WalkWithMe guardian pairing QR code',
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x33000000),
+                          blurRadius: 24,
+                          offset: Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: QrImageView(
+                        data: current.qrData,
+                        backgroundColor: Colors.white,
+                        padding: const EdgeInsets.all(16),
+                        semanticsLabel:
+                            'Private WalkWithMe guardian pairing QR code',
+                      ),
                     ),
                   ),
                 ),

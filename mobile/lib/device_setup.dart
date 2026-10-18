@@ -93,16 +93,28 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen>
     super.dispose();
   }
 
-  Widget row(String title, String detail, bool? ready, IconData icon) =>
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Icon(ready == true ? Icons.check_circle_outline : icon),
-        title: Text(title),
-        subtitle: Text(detail),
-      );
+  Widget row(String title, String detail, bool? ready, IconData icon) {
+    final colors = Theme.of(context).colorScheme;
+    final color = ready == true ? const Color(0xff3f84ff) : colors.primary;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .14),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(ready == true ? Icons.check_rounded : icon, color: color),
+      ),
+      title: Text(title),
+      subtitle: Text(detail),
+    );
+  }
+
   Widget card(List<Widget> children) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
@@ -127,11 +139,44 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen>
       appBar: AppBar(title: const Text('Set up WalkWithMe')),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
-            Text(
-              'Keep your session connected',
-              style: Theme.of(context).textTheme.headlineSmall,
+            Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xff173d86), Color(0xff0a1d43)],
+                ),
+                borderRadius: BorderRadius.circular(26),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.shield_outlined,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Keep your session connected',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(color: Colors.white),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'A quick readiness check before you head out.',
+                          style: TextStyle(color: Color(0xffd7e1ff)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             Text(

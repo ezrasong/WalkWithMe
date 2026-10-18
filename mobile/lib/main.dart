@@ -114,23 +114,36 @@ ThemeData kazeTheme(Brightness brightness) {
         ? const Color(0xff080a0e)
         : const Color(0xffeef1f5),
     textTheme: const TextTheme(
-      headlineSmall: TextStyle(
-        fontSize: 28,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.5,
+      displaySmall: TextStyle(
+        fontSize: 40,
+        fontWeight: FontWeight.w800,
+        height: 1.02,
+        letterSpacing: -1.5,
       ),
-      titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-      titleMedium: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+      headlineSmall: TextStyle(
+        fontSize: 30,
+        fontWeight: FontWeight.w800,
+        height: 1.1,
+        letterSpacing: -.8,
+      ),
+      titleLarge: TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.25,
+      ),
+      titleMedium: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
       bodyLarge: TextStyle(fontSize: 17, height: 1.4),
       bodyMedium: TextStyle(fontSize: 16, height: 1.4),
       bodySmall: TextStyle(fontSize: 14, height: 1.4),
+      labelLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
     ),
     appBarTheme: AppBarTheme(
-      backgroundColor: colors.surface,
+      backgroundColor: Colors.transparent,
       systemOverlayStyle: dark
           ? SystemUiOverlayStyle.light
           : SystemUiOverlayStyle.dark,
       surfaceTintColor: Colors.transparent,
+      elevation: 0,
       centerTitle: false,
       titleTextStyle: TextStyle(
         color: colors.onSurface,
@@ -139,41 +152,120 @@ ThemeData kazeTheme(Brightness brightness) {
       ),
     ),
     cardTheme: CardThemeData(
-      color: colors.surface,
+      color: dark
+          ? const Color(0xff111720).withValues(alpha: .92)
+          : Colors.white.withValues(alpha: .94),
       elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: colors.outline.withValues(alpha: .55)),
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: colors.surfaceContainerLow,
-      contentPadding: const EdgeInsets.all(16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: colors.outline.withValues(alpha: .55)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: colors.outline.withValues(alpha: .55)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: colors.primary, width: 1.6),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size.fromHeight(52),
         textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        side: BorderSide(color: colors.outline),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
     ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: colors.surface,
-      height: 72,
+      backgroundColor: dark ? const Color(0xff0d1118) : const Color(0xfff8f9fb),
+      indicatorColor: colors.primary.withValues(alpha: .2),
+      height: 76,
+      elevation: 0,
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (states) => TextStyle(
+          fontWeight: states.contains(WidgetState.selected)
+              ? FontWeight.w700
+              : FontWeight.w500,
+          color: states.contains(WidgetState.selected)
+              ? colors.primary
+              : colors.onSurfaceVariant,
+        ),
+      ),
+    ),
+    dividerTheme: DividerThemeData(
+      color: colors.outline.withValues(alpha: .45),
+      thickness: 1,
+    ),
+    listTileTheme: const ListTileThemeData(
+      minVerticalPadding: 12,
+      contentPadding: EdgeInsets.symmetric(horizontal: 4),
+    ),
+    chipTheme: ChipThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      side: BorderSide(color: colors.outline.withValues(alpha: .55)),
     ),
   );
+}
+
+class _BrandTitle extends StatelessWidget {
+  final String label;
+  const _BrandTitle(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: colors.primary,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: [
+              BoxShadow(
+                color: colors.primary.withValues(alpha: .28),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.route_rounded, color: Colors.white, size: 19),
+        ),
+        const SizedBox(width: 11),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class SessionScreen extends StatefulWidget {
@@ -297,7 +389,7 @@ class _SessionScreenState extends State<SessionScreen>
   );
   Widget card(List<Widget> children) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
@@ -305,136 +397,268 @@ class _SessionScreenState extends State<SessionScreen>
     ),
   );
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: Platform.isIOS
-        ? CupertinoNavigationBar(
-            middle: Text(
-              c.access == null
-                  ? 'WalkWithMe'
-                  : ['Session', 'Activity', 'Settings'][tab],
-            ),
-          )
-        : AppBar(
-            title: Text(
-              c.access == null
-                  ? 'WalkWithMe'
-                  : ['Session', 'Activity', 'Settings'][tab],
-            ),
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final title = c.access == null
+        ? 'WalkWithMe'
+        : ['Session', 'Activity', 'Settings'][tab];
+    return Scaffold(
+      appBar: Platform.isIOS
+          ? CupertinoNavigationBar(
+              middle: _BrandTitle(title),
+              backgroundColor: colors.surface.withValues(alpha: .9),
+              border: Border(
+                bottom: BorderSide(
+                  color: colors.outline.withValues(alpha: .35),
+                ),
+              ),
+            )
+          : AppBar(title: _BrandTitle(title)),
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: dark
+                ? const [Color(0xff0c1320), Color(0xff080a0e)]
+                : const [Color(0xffe9effa), Color(0xfff5f6f8)],
           ),
-    body: SafeArea(
-      child: Column(
-        children: [
-          Expanded(
-            child: c.access == null
-                ? onboarding()
-                : c.snapshot == null
-                ? waiting()
-                : [mapPage(), activityPage(), settingsPage()][tab],
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: c.access == null
+                    ? onboarding()
+                    : c.snapshot == null
+                    ? waiting()
+                    : [mapPage(), activityPage(), settingsPage()][tab],
+              ),
+              if (c.message.isNotEmpty && !transientMessage)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainer,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: colors.outline.withValues(alpha: .45),
+                    ),
+                  ),
+                  child: Semantics(liveRegion: true, child: Text(c.message)),
+                ),
+              if (c.busy) const LinearProgressIndicator(minHeight: 3),
+            ],
           ),
-          if (c.message.isNotEmpty && !transientMessage)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Semantics(liveRegion: true, child: Text(c.message)),
-            ),
-          if (c.busy) const LinearProgressIndicator(),
-        ],
+        ),
       ),
-    ),
-    bottomNavigationBar: c.access == null
-        ? null
-        : Platform.isIOS
-        ? CupertinoTabBar(
-            currentIndex: tab,
-            onTap: (value) => setState(() => tab = value),
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(CupertinoIcons.map),
-                label: 'Map',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(CupertinoIcons.clock),
-                label: 'Activity',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(CupertinoIcons.settings),
-                label: 'Settings',
-              ),
-            ],
-          )
-        : NavigationBar(
-            selectedIndex: tab,
-            onDestinationSelected: (value) => setState(() => tab = value),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.map_outlined),
-                label: 'Map',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.history),
-                label: 'Activity',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                label: 'Settings',
-              ),
-            ],
-          ),
-  );
+      bottomNavigationBar: c.access == null
+          ? null
+          : Platform.isIOS
+          ? CupertinoTabBar(
+              currentIndex: tab,
+              onTap: (value) => setState(() => tab = value),
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(CupertinoIcons.map),
+                  label: 'Map',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(CupertinoIcons.clock),
+                  label: 'Activity',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(CupertinoIcons.settings),
+                  label: 'Settings',
+                ),
+              ],
+            )
+          : NavigationBar(
+              selectedIndex: tab,
+              onDestinationSelected: (value) => setState(() => tab = value),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.map_outlined),
+                  selectedIcon: Icon(Icons.map_rounded),
+                  label: 'Map',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.history_outlined),
+                  selectedIcon: Icon(Icons.history_rounded),
+                  label: 'Activity',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings_rounded),
+                  label: 'Settings',
+                ),
+              ],
+            ),
+    );
+  }
+
   Widget onboarding() => ListView(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.fromLTRB(18, 10, 18, 32),
     children: [
-      Text(
-        'A timed safety session',
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
-      const Text(
-        'Stay connected to someone you trust. Start a session or join someone as their guardian.',
-      ),
-      TextButton.icon(
-        onPressed: openDeviceSetup,
-        icon: const Icon(Icons.settings_suggest_outlined),
-        label: const Text('Permissions & background setup'),
-      ),
-      TextButton.icon(
-        onPressed: () => setDemoControls(!showDemoControls),
-        icon: const Icon(Icons.movie_outlined),
-        label: Text(showDemoControls ? 'Hide demo tools' : 'Show demo tools'),
-      ),
-      if (showDemoControls) ...[
-        OutlinedButton.icon(
-          onPressed: () =>
-              openGuardianCamera(GuardianAr(session: c, demo: true)),
-          icon: const Icon(Icons.view_in_ar),
-          label: const Text('Local camera animation'),
-        ),
-        FilledButton.icon(
-          onPressed: c.busy ? null : startSharedDemo,
-          icon: const Icon(Icons.directions_walk),
-          label: const Text('Start shared walking demo'),
-        ),
-        note(
-          'Demo movement is simulated and shared with your paired guardian. The map and guardian camera use the same route. No real wearer recording starts.',
-        ),
-      ],
-      if (Platform.isAndroid) arPrivacyNotice(),
-      const SizedBox(height: 20),
-      if (Platform.isAndroid)
-        SegmentedButton<int>(
-          segments: const [
-            ButtonSegment(
-              value: 0,
-              label: Text('For me'),
-              icon: Icon(Icons.shield_outlined),
-            ),
-            ButtonSegment(
-              value: 1,
-              label: Text('For someone else'),
-              icon: Icon(Icons.people_outline),
+      Container(
+        padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xff173d86), Color(0xff0a1d43)],
+          ),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: const Color(0xff4f7cff).withValues(alpha: .5),
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x381746a2),
+              blurRadius: 30,
+              offset: Offset(0, 16),
             ),
           ],
-          selected: {setupRole},
-          onSelectionChanged: (value) =>
-              setState(() => setupRole = value.first),
+        ),
+        child: Stack(
+          children: [
+            const Positioned(
+              right: -18,
+              top: -24,
+              child: Icon(
+                Icons.route_rounded,
+                size: 128,
+                color: Color(0x1fffffff),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0x33ffffff)),
+                  ),
+                  child: const Text(
+                    'A timed safety session',
+                    style: TextStyle(
+                      color: Color(0xffb9cbff),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .2,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Text(
+                  'Move with confidence.',
+                  style: Theme.of(context).textTheme.displaySmall
+                      ?.copyWith(color: Colors.white, fontSize: 38),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Stay connected to someone you trust. Start a session or join someone as their guardian.',
+                  style: TextStyle(
+                    color: Color(0xffd7e1ff),
+                    fontSize: 16,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 14),
+      Card(
+        child: ListTile(
+          onTap: openDeviceSetup,
+          leading: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary
+                  .withValues(alpha: .15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.settings_suggest_outlined,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          title: const Text('Permissions & background setup'),
+          subtitle: const Text('Review access before starting a session.'),
+          trailing: const Icon(Icons.arrow_forward_rounded),
+        ),
+      ),
+      card([
+        TextButton.icon(
+          onPressed: () => setDemoControls(!showDemoControls),
+          icon: const Icon(Icons.movie_outlined),
+          label: Text(showDemoControls ? 'Hide demo tools' : 'Show demo tools'),
+        ),
+        if (showDemoControls) ...[
+          OutlinedButton.icon(
+            onPressed: () =>
+                openGuardianCamera(GuardianAr(session: c, demo: true)),
+            icon: const Icon(Icons.view_in_ar),
+            label: const Text('Local camera animation'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: c.busy ? null : startSharedDemo,
+            icon: const Icon(Icons.directions_walk),
+            label: const Text('Start shared walking demo'),
+          ),
+          note(
+            'Demo movement is simulated and shared with your paired guardian. The map and guardian camera use the same route. No real wearer recording starts.',
+          ),
+        ],
+        if (Platform.isAndroid) arPrivacyNotice(),
+      ]),
+      const SizedBox(height: 18),
+      if (Platform.isAndroid)
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline
+                  .withValues(alpha: .45),
+            ),
+          ),
+          child: SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(
+                value: 0,
+                label: Text('For me'),
+                icon: Icon(Icons.shield_outlined),
+              ),
+              ButtonSegment(
+                value: 1,
+                label: Text('For someone else'),
+                icon: Icon(Icons.people_outline),
+              ),
+            ],
+            selected: {setupRole},
+            showSelectedIcon: false,
+            style: const ButtonStyle(
+              visualDensity: VisualDensity(vertical: 2),
+              side: WidgetStatePropertyAll(BorderSide.none),
+            ),
+            onSelectionChanged: (value) =>
+                setState(() => setupRole = value.first),
+          ),
         ),
       if (setupRole == 1)
         card([
@@ -442,6 +666,7 @@ class _SessionScreenState extends State<SessionScreen>
             'Join as guardian',
             style: Theme.of(context).textTheme.titleLarge,
           ),
+          note('Follow their session without sharing your own location.'),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: c.busy ? null : scanGuardianQr,
@@ -477,6 +702,7 @@ class _SessionScreenState extends State<SessionScreen>
             'Start on the wearer’s phone',
             style: Theme.of(context).textTheme.titleLarge,
           ),
+          note('Choose the timing, permissions and person you trust.'),
           const SizedBox(height: 12),
           TextField(
             controller: name,
@@ -532,47 +758,97 @@ class _SessionScreenState extends State<SessionScreen>
             child: const Text('Start safety session'),
           ),
         ]),
-      note(
-        'Android guardians can enable background monitoring. iPhone guardians can enable local review reminders; these cannot confirm a missed check-in while WalkWithMe is closed. Apple push requires paid-team signing and server setup. No emergency dispatch, calls or SMS are connected. The PC and network must stay running.',
-      ),
-      note(
-        'OpenFreeMap serves vector maps using OpenStreetMap data and receives the viewed area and IP address. You can turn the street map off in Settings.',
-      ),
-      note(
-        'Location and camera permission are requested only for their respective features. Local camera modes process images on the guardian phone. Google-assisted alignment asks before sharing sensor data with Google.',
-      ),
+      const SizedBox(height: 12),
+      card([
+        Row(
+          children: [
+            Icon(
+              Icons.verified_user_outlined,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Clear limits',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ],
+        ),
+        note(
+          'Android guardians can enable background monitoring. iPhone guardians can enable local review reminders; these cannot confirm a missed check-in while WalkWithMe is closed. Apple push requires paid-team signing and server setup. No emergency dispatch, calls or SMS are connected. The PC and network must stay running.',
+        ),
+        const Divider(height: 24),
+        note(
+          'OpenFreeMap serves vector maps using OpenStreetMap data and receives the viewed area and IP address. You can turn the street map off in Settings.',
+        ),
+        note(
+          'Location and camera permission are requested only for their respective features. Local camera modes process images on the guardian phone. Google-assisted alignment asks before sharing sensor data with Google.',
+        ),
+      ]),
     ],
   );
   Widget waiting() => ListView(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.fromLTRB(20, 56, 20, 24),
     children: [
-      const Icon(Icons.cloud_off_outlined, size: 48),
-      const SizedBox(height: 16),
-      Text(c.connection),
-      note(
-        c.guardian
-            ? 'Private evidence is hidden while the server cannot confirm access.'
-            : 'The native recorder can continue queuing evidence. This is not server confirmation.',
-      ),
-      FilledButton(
-        onPressed: c.busy ? null : c.refresh,
-        child: const Text('Reconnect'),
-      ),
-      TextButton.icon(
-        onPressed: openDeviceSetup,
-        icon: const Icon(Icons.settings_suggest_outlined),
-        label: const Text('Permissions & background setup'),
-      ),
-      if (!c.guardian)
-        OutlinedButton(
-          onPressed: () => c.mutate('resolve'),
-          child: const Text('End session on server'),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(26),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary
+                        .withValues(alpha: .14),
+                    borderRadius: BorderRadius.circular(19),
+                  ),
+                  child: Icon(
+                    Icons.cloud_off_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 30,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                'Reconnecting',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Text(c.connection),
+              note(
+                c.guardian
+                    ? 'Private evidence is hidden while the server cannot confirm access.'
+                    : 'The native recorder can continue queuing evidence. This is not server confirmation.',
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: c.busy ? null : c.refresh,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Reconnect'),
+              ),
+              TextButton.icon(
+                onPressed: openDeviceSetup,
+                icon: const Icon(Icons.settings_suggest_outlined),
+                label: const Text('Permissions & background setup'),
+              ),
+              if (!c.guardian)
+                OutlinedButton(
+                  onPressed: () => c.mutate('resolve'),
+                  child: const Text('End session on server'),
+                ),
+              if (c.guardian)
+                TextButton(
+                  onPressed: c.forget,
+                  child: const Text('Remove guardian access'),
+                ),
+            ],
+          ),
         ),
-      if (c.guardian)
-        TextButton(
-          onPressed: c.forget,
-          child: const Text('Remove guardian access'),
-        ),
+      ),
     ],
   );
   String get phase => c.snapshot?['phase'] ?? '';
@@ -650,34 +926,64 @@ class _SessionScreenState extends State<SessionScreen>
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                urgent
-                    ? Icons.notifications_active_outlined
-                    : phase == 'resolved'
-                    ? Icons.check_circle_outline
-                    : Icons.shield_outlined,
-                size: 22,
-                color: urgent ? colors.error : colors.primary,
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: (urgent ? colors.error : colors.primary).withValues(
+                    alpha: .14,
+                  ),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(
+                  urgent
+                      ? Icons.notifications_active_outlined
+                      : phase == 'resolved'
+                      ? Icons.check_circle_outline
+                      : Icons.shield_outlined,
+                  size: 23,
+                  color: urgent ? colors.error : colors.primary,
+                ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Flexible(
-                child: Text(
-                  phaseText,
-                  style: Theme.of(context).textTheme.titleMedium,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      phaseText,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text(
+                      c.guardian ? 'Guardian view' : 'Your safety session',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
           if (['armed', 'challenge'].contains(phase))
-            Text(
-              countdown(seconds),
-              semanticsLabel: '$seconds seconds until response is due',
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(color: urgent ? colors.error : colors.primary),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: (urgent ? colors.error : colors.primary).withValues(
+                  alpha: .13,
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                countdown(seconds),
+                semanticsLabel: '$seconds seconds until response is due',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: urgent ? colors.error : colors.primary,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
             ),
         ],
       ),
-      const SizedBox(height: 4),
+      const SizedBox(height: 12),
       Text(
         phase == 'resolved'
             ? 'Sharing has stopped.'
@@ -764,13 +1070,26 @@ class _SessionScreenState extends State<SessionScreen>
         final compact =
             size.maxHeight < 520 ||
             MediaQuery.textScalerOf(context).scale(16) > 23;
-        final map = ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: TrailMap(key: ValueKey(s['id']), snapshot: s, tiles: tiles),
+        final map = Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: colors.outline.withValues(alpha: .65)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 24,
+                offset: Offset(0, 12),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(25),
+            child: TrailMap(key: ValueKey(s['id']), snapshot: s, tiles: tiles),
+          ),
         );
         if (compact) {
           return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
             children: [
               status,
               SizedBox(height: 360, child: map),
@@ -779,7 +1098,7 @@ class _SessionScreenState extends State<SessionScreen>
           );
         }
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
           child: Column(
             children: [
               status,
@@ -1136,15 +1455,50 @@ class _SessionScreenState extends State<SessionScreen>
     };
     final activity = c.snapshot?['activity'] as List? ?? [];
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
       children: [
         Text('Activity', style: Theme.of(context).textTheme.headlineSmall),
-        if (activity.isEmpty) const Text('No activity is shared yet.'),
+        const SizedBox(height: 6),
+        Text(
+          'A server-confirmed timeline of this session.',
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 14),
+        if (activity.isEmpty)
+          card([
+            const Icon(Icons.history_toggle_off_rounded, size: 40),
+            const SizedBox(height: 12),
+            const Text('No activity is shared yet.'),
+          ]),
         for (final entry in activity.reversed)
-          ListTile(
-            leading: const Icon(Icons.history),
-            title: Text(labels[entry['action']] ?? entry['action']),
-            subtitle: Text('${at(entry['at'])} · ${entry['role']}'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              child: ListTile(
+                leading: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary
+                        .withValues(alpha: .14),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    entry['action'] == 'alert'
+                        ? Icons.notifications_active_outlined
+                        : entry['action'] == 'check-in'
+                        ? Icons.check_rounded
+                        : Icons.route_rounded,
+                    color: entry['action'] == 'alert'
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                title: Text(labels[entry['action']] ?? entry['action']),
+                subtitle: Text('${at(entry['at'])} · ${entry['role']}'),
+              ),
+            ),
           ),
       ],
     );
@@ -1175,8 +1529,15 @@ class _SessionScreenState extends State<SessionScreen>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 20, 4, 0),
-          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+          padding: const EdgeInsets.fromLTRB(6, 24, 6, 2),
+          child: Text(
+            title.toUpperCase(),
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: colors.primary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+            ),
+          ),
         ),
         card(children),
       ],
@@ -1199,8 +1560,15 @@ class _SessionScreenState extends State<SessionScreen>
       onTap: onTap,
     );
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
       children: [
+        Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 6),
+        Text(
+          'Control access, appearance and the active session.',
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: colors.onSurfaceVariant),
+        ),
         section('Presentation', [
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
