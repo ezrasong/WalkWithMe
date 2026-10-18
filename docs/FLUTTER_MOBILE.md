@@ -66,7 +66,7 @@ open ios/Runner.xcworkspace
 
 In Xcode, select Runner, enable **Automatically manage signing**, choose your Apple Account's Personal Team and the connected iPhone, then run. Enable iPhone Developer Mode if requested. This is a signed development build. A free Apple Account supports local installation and local notification reminders, usually with a seven-day provisioning lifetime. It does not provide Apple remote push capability. TestFlight/App Store distribution and remote push require paid Apple Developer membership. Leave the default `Kaze.entitlements` and `KAZE_PUSH_ENABLED=NO` for free-account testing.
 
-Join as guardian using the link copied from the wearer's phone. Background wearer recording currently runs on Android. Signed builds and real-device permissions still need physical iPhone verification.
+Join as guardian by scanning the QR code shown in Settings on the wearer's phone, or entering its 10-character pairing code. Background wearer recording currently runs on Android. Signed builds and real-device permissions still need physical iPhone verification.
 
 ### iOS simulator regression suite
 
@@ -98,7 +98,7 @@ The suite uses synthetic observations against the real API to check first launch
 invitation validation, private versus live sharing, missed check-ins, map controls,
 guardian acknowledgment and arrival, unsupported AR fallback, appearance and
 keychain restoration, offline recovery, revocation, deletion, expiry, landscape,
-large text, licenses and link removal. It does not measure GPS or compass accuracy,
+large text, licenses and access removal. It does not measure GPS or compass accuracy,
 camera rendering, AR registration, background delivery or paired-watch behavior.
 ARKit world tracking and the camera require physical devices.
 
@@ -114,7 +114,7 @@ Install updates over the existing app using the same signing key. Do not uninsta
 
 ## Sessions
 
-Choose timing and start a session on the wearer's phone. The HTTPS service address is built into the app and inherited automatically by the watch. Copy the guardian link from Settings to the guardian's phone. Invitations for another server are rejected before sending credentials. Trails are shared after nonresponse unless live sharing was enabled separately.
+Choose timing and start a session on the wearer's phone. The HTTPS service address is built into the app and inherited automatically by the watch. Choose **Settings → Show guardian QR code**. On the guardian's phone choose **Scan QR code**, or enter the displayed pairing code. Each code works once for five minutes; generating a new one replaces the previous code. QR invitations for another server are rejected before sending credentials. Both app builds and the backend need the pairing update. Trails are shared after nonresponse unless live sharing was enabled separately. See [pairing behavior and limits](GUARDIAN_PAIRING.md).
 
 On an Android guardian, opt into **Background guardian alerts** on the session screen or in Settings. The native monitor uses a persistent notification and checks the server every five seconds after the previous request completes. It requires notifications, network access and background battery use; it does not request guardian location or motion permissions. Alerts contain no wearer name, location or private link. Open KAZE to view evidence or explicitly acknowledge. Stopping monitoring does not acknowledge or resolve the wearer's alert. Removing the guardian link also stops monitoring and removes its saved access. Expiry, revocation, deletion and session resolution stop monitoring after confirmation; known expiry is enforced locally during network loss. A stale response cannot restore a removed link. After force-stop or a phone reboot, reopen KAZE and enable monitoring again.
 

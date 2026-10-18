@@ -11,16 +11,18 @@ import { geographicTrail } from './locations.js';
 import { guardianArTrail } from './ar.js';
 import { applePushFromEnv, GuardianPushDelivery } from './apple-push.js';
 import { MotionEvaluator } from './motion.js';
+import { GuardianInvites } from './guardian-invites.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, applePush = null, motion = new MotionEvaluator() } = {}) {
   const store = new Store(dbPath), limits = new Map();
   const motionLimits = new Map();
+  const invites = new GuardianInvites(now);
   function current(id) {
     let s = store.get(id);
     if (!s) throw new Problem(404, 'Session not found');
     const updated = advance(s, now());
-    if (['expired', 'resolved'].includes(updated.phase)) motionLimits.delete(id);
+    if (['expired', 'resolved'].includes(updated.phase)) { motionLimits.delete(id); invites.invalidate(id); }
     if (updated.phase === 'expired' && s.phase !== 'expired') { store.clearEvents(s.id); updated.origin = 'Expired'; updated.name = 'Expired session'; }
     if (['expired', 'resolved'].includes(updated.phase)) store.removeGuardianPush(id);
     if (JSON.stringify(updated) !== JSON.stringify(s)) store.transaction(() => {
@@ -73,6 +75,19 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
       const url = new URL(req.url, 'http://localhost');
       if (req.method !== 'GET' && req.headers.origin && req.headers.origin !== `http://${req.headers.host}` && req.headers.origin !== `https://${req.headers.host}`) throw new Problem(403, 'Cross-origin request denied');
       if (url.pathname === '/api/health') return json(200, { ok: true, simulation: true, serverNow: now() });
+      if (url.pathname === '/api/guardian-invites/redeem') {
+        if (req.method !== 'POST') throw new Problem(405, 'Method not allowed');
+        invites.allowAttempt(req.socket.remoteAddress);
+        const b = await body(req);
+        // No await between consuming the code and checking its current access.
+        const invitation = invites.consume(b.code);
+        const stored = store.get(invitation.id);
+        if (!stored) throw new Problem(404, 'Pairing code is invalid, expired or already used. Ask for a new code.');
+        const s = current(invitation.id);
+        if (s.guardianRevokedAt || ['resolved', 'expired'].includes(s.phase) || !matches(invitation.guardianToken, s.guardianHash))
+          throw new Problem(404, 'Pairing code is invalid, expired or already used. Ask for a new code.');
+        return json(200, { id: s.id, guardianToken: invitation.guardianToken });
+      }
       if (url.pathname === '/api/sessions' && req.method === 'POST') {
         const key = req.socket.remoteAddress, limit = limits.get(key) ?? { at: now(), count: 0 };
         if (now() - limit.at > 3600000) { limit.at = now(); limit.count = 0; }
@@ -92,9 +107,15 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           initialHeading: number(b.initialHeading ?? 0, 0, 360, 'initial heading'), ownerHash: hash(owner), guardianHash: hash(guardian), watchHash: hash(watch) };
         store.save(s); store.recordActivity(s.id, 'started', now(), 'owner'); return json(201, { ...snapshot(s, 'owner'), ownerToken: owner, guardianToken: guardian, watchToken: watch });
       }
-      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push|motion))?$/.exec(url.pathname);
+      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push|guardian-invite|motion))?$/.exec(url.pathname);
       if (match) {
         const id = match[1], action = match[2]; let s = current(id);
+        if (action === 'guardian-invite') {
+          auth(req, s, ['owner']);
+          if (req.method !== 'POST') throw new Problem(405, 'Method not allowed');
+          const b = await body(req); s = current(id); auth(req, s, ['owner']);
+          return json(201, invites.issue(s, b.guardianToken));
+        }
         if (action === 'guardian-push') {
           auth(req, s, ['guardian']);
           if (!['POST', 'DELETE'].includes(req.method)) throw new Problem(405, 'Method not allowed');
@@ -151,7 +172,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           if (role === 'guardian') { s.guardianSeenAt = now(); if (s.phase === 'alert') s.alertSeenAt ??= now(); store.save(s); }
           return json(200, snapshot(s, role));
         }
-        if (req.method === 'DELETE' && !action) { auth(req, s, ['owner']); motionLimits.delete(id); store.remove(id); return json(200, { deleted: true }); }
+        if (req.method === 'DELETE' && !action) { auth(req, s, ['owner']); motionLimits.delete(id); invites.invalidate(id); store.remove(id); return json(200, { deleted: true }); }
         if (req.method === 'POST' && action) {
           const role = auth(req, s, action === 'events' || action === 'check-in' ? ['owner', 'watch'] :
             action === 'acknowledge' || action === 'arrived' ? ['guardian'] : ['owner']);
@@ -163,6 +184,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           if (action === 'revoke-guardian') {
             if (b.confirm !== true) throw new Problem(400, 'Explicit confirmation required');
             s.guardianHash = hash(token()); s.guardianRevokedAt = now(); s.liveSharing = false;
+            invites.invalidate(id);
             store.removeGuardianPush(id);
           }
           if (action === 'events') {
@@ -185,7 +207,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
             if (action === 'acknowledge') s.acknowledgedAt ??= now();
             else s.arrivalReportedAt ??= now();
           }
-          if (action === 'resolve') { if (b.confirm !== true) throw new Problem(400, 'Explicit confirmation required'); s.phase = 'resolved'; s.resolvedAt = now(); store.removeGuardianPush(id); }
+          if (action === 'resolve') { if (b.confirm !== true) throw new Problem(400, 'Explicit confirmation required'); s.phase = 'resolved'; s.resolvedAt = now(); invites.invalidate(id); store.removeGuardianPush(id); }
           store.transaction(() => { store.save(s); store.recordActivity(id, action, now(), role); }); return json(200, snapshot(s, role));
         }
         throw new Problem(405, 'Method not allowed');
@@ -199,7 +221,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
     } catch (e) { if (!res.headersSent) json(e.status ?? 500, { error: e.status ? e.message : 'Internal server error' }); else res.end(); }
   });
   const push = new GuardianPushDelivery(store, applePush, current, now);
-  const tick = () => { for (const s of store.all()) current(s.id); return push.flush(); };
+  const tick = () => { invites.prune(); for (const s of store.all()) current(s.id); return push.flush(); };
   const timer = setInterval(() => { void tick().catch(() => {}); }, tickMs); timer.unref();
   server.on('close', () => { clearInterval(timer); push.close(); motion.close(); store.close(); });
   return { server, store, tick };

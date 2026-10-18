@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'session.dart';
 import 'direction_preview.dart';
 import 'guardian_ar.dart';
+import 'guardian_pairing.dart';
 import 'motion_capture.dart';
 import 'device_setup.dart';
 import 'trail_map.dart';
@@ -172,7 +173,7 @@ class _SessionScreenState extends State<SessionScreen>
     with WidgetsBindingObserver {
   final c = SessionController();
   final name = TextEditingController(text: 'Alex'),
-      link = TextEditingController();
+      pairingCode = TextEditingController();
   int tab = 0, interval = 120, grace = 30;
   int setupRole = Platform.isAndroid ? 0 : 1;
   bool consent = false, live = false, tiles = true;
@@ -181,7 +182,6 @@ class _SessionScreenState extends State<SessionScreen>
   bool get transientMessage => const [
     'Check-in confirmed by server.',
     'Confirmed by server.',
-    'Private guardian link copied.',
   ].contains(c.message);
   @override
   void initState() {
@@ -255,7 +255,7 @@ class _SessionScreenState extends State<SessionScreen>
     c.removeListener(update);
     c.dispose();
     name.dispose();
-    link.dispose();
+    pairingCode.dispose();
     super.dispose();
   }
 
@@ -389,18 +389,31 @@ class _SessionScreenState extends State<SessionScreen>
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: c.busy ? null : scanGuardianQr,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan QR code'),
+          ),
+          note(
+            'Scan the QR code on the wearer’s phone, or enter their pairing code.',
+          ),
           TextField(
-            controller: link,
+            controller: pairingCode,
             decoration: const InputDecoration(
-              labelText: 'Private guardian link',
+              labelText: 'Pairing code',
+              hintText: 'ABCDE-FGHJK',
             ),
+            maxLength: 11,
             autocorrect: false,
             enableSuggestions: false,
-            keyboardType: TextInputType.url,
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z2-9 -]')),
+            ],
           ),
           const SizedBox(height: 12),
           FilledButton(
-            onPressed: c.busy ? null : () => c.join(link.text),
+            onPressed: c.busy ? null : () => c.joinCode(pairingCode.text),
             child: const Text('Open my person’s session'),
           ),
         ]),
@@ -504,7 +517,7 @@ class _SessionScreenState extends State<SessionScreen>
       if (c.guardian)
         TextButton(
           onPressed: c.forget,
-          child: const Text('Remove this guardian link'),
+          child: const Text('Remove guardian access'),
         ),
     ],
   );
@@ -720,6 +733,16 @@ class _SessionScreenState extends State<SessionScreen>
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     return Navigator.of(context)
         .push<void>(MaterialPageRoute(builder: (_) => screen));
+  }
+
+  Future<void> scanGuardianQr() async {
+    if (!await c.prepareGuardianScan() || !mounted) return;
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const GuardianScannerScreen()),
+    );
+    if (!mounted || code == null) return;
+    pairingCode.text = code;
+    await c.joinCode(code);
   }
 
   Future<void> showSessionDetails() => showModalBottomSheet<void>(
@@ -945,7 +968,8 @@ class _SessionScreenState extends State<SessionScreen>
                   builder: (_) => MotionCapturePage(session: c),
                 ),
               ),
-              subtitle: 'Automatic motion streaming and optional private capture.',
+              subtitle:
+                  'Automatic motion streaming and optional private capture.',
             ),
         ]),
         if (c.guardian && phase != 'resolved')
@@ -1005,26 +1029,24 @@ class _SessionScreenState extends State<SessionScreen>
             ),
         ]),
         if (!c.guardian &&
-            c.access?.guardianLink != null &&
+            c.access?.guardianToken != null &&
             s['guardianRevokedAt'] == null &&
             phase != 'resolved')
           section('Your guardian', [
             const Text(
-              'Give this private link only to the person you trust. They can join on iPhone or Android.',
+              'Show your guardian a QR code or give them a short pairing code. They can join on iPhone or Android.',
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: () async {
-                await Clipboard.setData(
-                  ClipboardData(text: c.access!.guardianLink!),
-                );
-                if (mounted) {
-                  c.message = 'Private guardian link copied.';
-                  update();
-                }
-              },
-              icon: const Icon(Icons.ios_share),
-              label: const Text('Copy guardian link'),
+              onPressed: c.busy
+                  ? null
+                  : () => Navigator.of(context).push<void>(
+                      MaterialPageRoute(
+                        builder: (_) => GuardianPairingScreen(session: c),
+                      ),
+                    ),
+              icon: const Icon(Icons.qr_code),
+              label: const Text('Show guardian QR code'),
             ),
             const SizedBox(height: 8),
             action(
@@ -1077,7 +1099,11 @@ class _SessionScreenState extends State<SessionScreen>
             if (phase == 'resolved')
               action(Icons.add_circle_outline, 'Return to setup', c.forget),
           ] else
-            action(Icons.link_off, 'Remove this guardian link', c.forget),
+            action(
+              Icons.person_remove_outlined,
+              'Remove guardian access',
+              c.forget,
+            ),
         ]),
         section('About this prototype', [
           const Text(

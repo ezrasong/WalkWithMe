@@ -17,7 +17,7 @@ Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connectio
 cloudflared tunnel --url http://127.0.0.1:4173
 ```
 
-The tunnel prints a public HTTPS address. Bake that address into developer phone builds with `--dart-define=KAZE_BASE_URL=https://your-service.example`. The normal app has no backend-address field. Share the guardian link from Settings with the second phone. Keep the PC awake and both processes running in independent terminals. Stopping either process interrupts access. Restarting a Quick Tunnel changes its address and requires updated developer builds; use a stable named hostname before distributing the app.
+The tunnel prints a public HTTPS address. Bake that address into developer phone builds with `--dart-define=KAZE_BASE_URL=https://your-service.example`. The normal app has no backend-address field. Show the guardian QR code from Settings to the second phone, or enter its pairing code. Both phones must use the same service. Keep the PC awake and both processes running in independent terminals. Stopping either process interrupts access and invalidates unredeemed pairing codes. Restarting a Quick Tunnel changes its address and requires updated developer builds; use a stable named hostname before distributing the app.
 
 For automatic source reload during development, use `npm run dev` instead of `npm start`. A reload briefly interrupts requests and recovers persisted deadlines; it is not continuous availability. Keep local tunnel launchers, connection addresses, logs and evidence under ignored `scripts/` and `artifacts/` directories.
 

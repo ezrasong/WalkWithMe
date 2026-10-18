@@ -9,6 +9,66 @@ import 'package:http/http.dart' as http;
 
 import 'backend.dart';
 
+String guardianPairingCode(String value) {
+  final code = value.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
+  if (value.length > 32 || !RegExp(r'^[2-9A-HJ-NP-Z]{10}$').hasMatch(code)) {
+    throw const FormatException(
+      'Enter the 10-character pairing code shown on the wearer’s phone.',
+    );
+  }
+  return code;
+}
+
+String guardianCodeFromQr(String value, {String baseUrl = kazeBackendUrl}) {
+  if (value.length > 2048) {
+    throw const FormatException('Scan a KAZE guardian QR code.');
+  }
+  final dynamic data;
+  try {
+    data = jsonDecode(value);
+  } catch (_) {
+    throw const FormatException('Scan a KAZE guardian QR code.');
+  }
+  if (data is! Map ||
+      data['app'] != 'KAZE' ||
+      data['version'] != 1 ||
+      data['baseUrl'] is! String ||
+      data['code'] is! String) {
+    throw const FormatException('Scan a KAZE guardian QR code.');
+  }
+  if (validateBaseUrl(data['baseUrl']) != validateBaseUrl(baseUrl)) {
+    throw const FormatException(
+      'This QR code belongs to a different KAZE service. Ask for a current invitation.',
+    );
+  }
+  return guardianPairingCode(data['code']);
+}
+
+class GuardianInvitation {
+  final String code, baseUrl;
+  final int expiresAt, serverNow;
+  final DateTime received = DateTime.now();
+  GuardianInvitation({
+    required this.code,
+    required this.baseUrl,
+    required this.expiresAt,
+    required this.serverNow,
+  });
+  int get secondsLeft =>
+      ((expiresAt -
+                  serverNow -
+                  DateTime.now().difference(received).inMilliseconds) /
+              1000)
+          .ceil()
+          .clamp(0, 300);
+  String get qrData => jsonEncode({
+    'app': 'KAZE',
+    'version': 1,
+    'baseUrl': baseUrl,
+    'code': code,
+  });
+}
+
 String validateBaseUrl(String input, {bool allowLocalHttp = kDebugMode}) {
   final uri = Uri.tryParse(input.trim());
   if (uri == null ||
@@ -293,7 +353,7 @@ class SessionController extends ChangeNotifier {
       final raw = await storage.read(key: 'session');
       if (raw != null) access = SessionAccess.fromJson(jsonDecode(raw));
     } catch (_) {
-      message = 'Saved access could not be restored. Reconnect using your private link.';
+      message = 'Saved access could not be restored. Scan a new guardian QR code or enter a pairing code.';
     }
     if (backgroundGuardianSupported) {
       try {
@@ -455,6 +515,50 @@ class SessionController extends ChangeNotifier {
     }
     startPolling();
   });
+  Future<GuardianInvitation> createGuardianInvitation() async {
+    final current = access;
+    if (current == null ||
+        guardian ||
+        current.guardianToken == null ||
+        snapshot == null ||
+        snapshot!['guardianRevokedAt'] != null ||
+        snapshot!['phase'] == 'resolved') {
+      throw const FormatException(
+        'An active wearer session is required to invite a guardian.',
+      );
+    }
+    final data = await api(
+      action: 'guardian-invite',
+      body: {'guardianToken': current.guardianToken},
+    );
+    if (disposed ||
+        current != access ||
+        snapshot == null ||
+        snapshot!['guardianRevokedAt'] != null ||
+        snapshot!['phase'] == 'resolved') {
+      throw const FormatException(
+        'Session access changed. Reopen guardian pairing.',
+      );
+    }
+    if (data['code'] is! String ||
+        data['expiresAt'] is! int ||
+        data['serverNow'] is! int ||
+        data['expiresAt'] <= data['serverNow'] ||
+        data['expiresAt'] - data['serverNow'] > 300000) {
+      throw const FormatException(
+        'The server returned an invalid pairing code.',
+      );
+    }
+    final code = guardianPairingCode(data['code']);
+    return GuardianInvitation(
+      code: '${code.substring(0, 5)}-${code.substring(5)}',
+      baseUrl: current.baseUrl,
+      expiresAt: data['expiresAt'],
+      serverNow: data['serverNow'],
+    );
+  }
+
+  // Retain legacy invitations for saved builds; the app presents QR/code pairing.
   Future<void> join(String link) => run(() async {
     final next = SessionAccess.guardian(link);
     if (Uri.parse(next.baseUrl).origin !=
@@ -463,12 +567,56 @@ class SessionController extends ChangeNotifier {
         'This invitation belongs to a different KAZE service. Ask the wearer for a current invitation.',
       );
     }
+    await _ensureGuardianDevice();
+    await _joinGuardian(next);
+  });
+
+  Future<void> joinCode(String input) => run(() async {
+    final code = guardianPairingCode(input);
+    await _ensureGuardianDevice();
+    final startedRevision = revision;
+    final base = validateBaseUrl(kazeBackendUrl);
+    final data = await request(
+      base,
+      '/api/guardian-invites/redeem',
+      body: {'code': code},
+    );
+    if (disposed || !visible || revision != startedRevision) return;
+    if (data['id'] is! String || data['guardianToken'] is! String) {
+      throw const FormatException(
+        'The server returned invalid guardian access.',
+      );
+    }
+    await _joinGuardian(
+      SessionAccess(
+        baseUrl: base,
+        id: data['id'],
+        token: data['guardianToken'],
+        role: 'guardian',
+      ),
+    );
+  });
+
+  Future<bool> prepareGuardianScan() async {
+    var allowed = false;
+    await run(() async {
+      await _ensureGuardianDevice();
+      allowed = true;
+    });
+    return allowed && !disposed && visible;
+  }
+
+  Future<void> _ensureGuardianDevice() async {
     if (Platform.isAndroid &&
         (await native.invokeMapMethod('status'))?['active'] == true) {
       throw const FormatException(
         'End your local recording session before using this phone as guardian.',
       );
     }
+  }
+
+  Future<void> _joinGuardian(SessionAccess next) async {
+    final startedRevision = revision;
     final data = await request(
       next.baseUrl,
       '/api/sessions/${next.id}',
@@ -476,18 +624,22 @@ class SessionController extends ChangeNotifier {
     );
     if (data['role'] != 'guardian') {
       throw const FormatException(
-        'Use the guardian link, not owner pairing credentials.',
+        'This invitation does not grant guardian access.',
       );
     }
+    if (disposed || !visible || revision != startedRevision) return;
     await _stopGuardianMonitoring();
+    if (disposed || !visible || revision != startedRevision) return;
     access = next;
     device = {};
     snapshot = data;
     received = DateTime.now();
     await storage.write(key: 'session', value: jsonEncode(next.toJson()));
+    if (disposed || !visible || revision != startedRevision) return;
     await _refreshGuardianStatus();
     startPolling();
-  });
+  }
+
   Future<void> mutate(String action) => run(() async {
     final data = await api(action: action, body: {'confirm': true});
     snapshot = data;

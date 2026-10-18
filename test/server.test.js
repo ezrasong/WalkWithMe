@@ -22,6 +22,68 @@ async function fixture(t, opts = {}) {
   return { app, base, request, create, time: () => clock, jump: ms => { clock += ms; app.tick(); } };
 }
 
+test('guardian QR/code invitations require owner access and preserve guardian scope and sharing consent', async t => {
+  const f = await fixture(t), s = await f.create(), route = `/api/sessions/${s.id}/guardian-invite`;
+  for (const token of [undefined, s.guardianToken, s.watchToken]) {
+    assert.equal((await f.request(route, { token, body: { guardianToken: s.guardianToken } })).status, 401);
+  }
+  assert.equal((await f.request(route, { token: s.ownerToken })).status, 405);
+  assert.equal((await f.request(route, { token: s.ownerToken, body: { guardianToken: s.ownerToken } })).status, 400);
+  const before = f.app.store.get(s.id), activity = f.app.store.activity(s.id);
+  const invitation = await f.request(route, { token: s.ownerToken, body: { guardianToken: s.guardianToken } });
+  assert.equal(invitation.status, 201);
+  assert.match(invitation.body.code, /^[2-9A-HJ-NP-Z]{5}-[2-9A-HJ-NP-Z]{5}$/);
+  assert.equal(invitation.body.expiresAt, f.time() + 300000);
+  assert.deepEqual(Object.keys(invitation.body).sort(), ['code', 'expiresAt', 'serverNow']);
+  const redeem = await f.request('/api/guardian-invites/redeem', { body: { code: invitation.body.code.toLowerCase().replace('-', ' ') } });
+  assert.equal(redeem.status, 200);
+  assert.deepEqual(redeem.body, { id: s.id, guardianToken: s.guardianToken });
+  assert.deepEqual(f.app.store.get(s.id), before);
+  assert.deepEqual(f.app.store.activity(s.id), activity);
+  const guardian = await f.request(`/api/sessions/${s.id}`, { token: redeem.body.guardianToken });
+  assert.equal(guardian.body.role, 'guardian');
+  assert.equal(guardian.body.shared, false);
+  assert.equal(guardian.body.trail, null);
+  assert.equal((await f.request('/api/guardian-invites/redeem', { body: { code: invitation.body.code } })).status, 404);
+});
+
+test('regeneration replaces the old code and simultaneous redemption succeeds only once', async t => {
+  const f = await fixture(t), s = await f.create();
+  const issue = () => f.request(`/api/sessions/${s.id}/guardian-invite`, { token: s.ownerToken, body: { guardianToken: s.guardianToken } });
+  const first = await issue(), second = await issue();
+  const redeem = code => f.request('/api/guardian-invites/redeem', { body: { code } });
+  assert.equal((await redeem(first.body.code)).status, 404);
+  assert.deepEqual((await Promise.all([redeem(second.body.code), redeem(second.body.code)])).map(r => r.status).sort(), [200, 404]);
+});
+
+test('pairing codes expire and session revocation, resolution or deletion invalidates them', async t => {
+  for (const action of ['expire-code', 'expire-session', 'revoke-guardian', 'resolve', 'delete']) {
+    const f = await fixture(t), s = await f.create(), route = `/api/sessions/${s.id}`;
+    const invitation = await f.request(`${route}/guardian-invite`, { token: s.ownerToken, body: { guardianToken: s.guardianToken } });
+    if (action === 'expire-code') f.jump(300000);
+    else if (action === 'expire-session') f.jump(8 * 3600000);
+    else if (action === 'delete') await f.request(route, { token: s.ownerToken, method: 'DELETE' });
+    else await f.request(`${route}/${action}`, { token: s.ownerToken, body: { confirm: true } });
+    assert.equal((await f.request('/api/guardian-invites/redeem', { body: { code: invitation.body.code } })).status, 404, action);
+    if (['revoke-guardian', 'resolve'].includes(action)) {
+      assert.equal((await f.request(`${route}/guardian-invite`, { token: s.ownerToken, body: { guardianToken: s.guardianToken } })).status, 409);
+    }
+  }
+});
+
+test('pairing guesses are validated and rate limited without exposing credentials', async t => {
+  const f = await fixture(t);
+  assert.equal((await f.request('/api/guardian-invites/redeem')).status, 405);
+  for (const code of [null, 123, {}, 'A'.repeat(33), '00000-00000', 'AAAAA-BBBBB', 'https://example.test', '', 'QQQQQ-QQQQQ', 'ZZZZZ-ZZZZZ']) {
+    const result = await f.request('/api/guardian-invites/redeem', { body: { code } });
+    assert.equal(result.status, 404);
+    assert.deepEqual(Object.keys(result.body), ['error']);
+  }
+  assert.equal((await f.request('/api/guardian-invites/redeem', { body: { code: 'AAAAA-BBBBB' } })).status, 429);
+  f.jump(60000);
+  assert.equal((await f.request('/api/guardian-invites/redeem', { body: { code: 'AAAAA-BBBBB' } })).status, 404);
+});
+
 test('motion batches require owner consent, are rate bounded and cannot alter safety evidence', async t => {
   let evaluations = 0;
   const motion = { close() {}, async evaluate() {

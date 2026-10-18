@@ -71,8 +71,13 @@ void main() {
 
   String path(Map<String, dynamic> s, [String action = '']) =>
       '/api/sessions/${s['id']}${action.isEmpty ? '' : '/$action'}';
-  String invite(Map<String, dynamic> s) =>
-      '$kazeBackendUrl/guardian#session=${s['id']}&token=${s['guardianToken']}';
+  Future<String> invite(Map<String, dynamic> s) async =>
+      (await request(
+            path(s, 'guardian-invite'),
+            token: s['ownerToken'] as String,
+            body: {'guardianToken': s['guardianToken']},
+          ))['code']
+          as String;
 
   Future<void> readings(Map<String, dynamic> s) async {
     final now = (await control({}))['now'] as int;
@@ -180,7 +185,7 @@ void main() {
   }
 
   Future<void> join(WidgetTester tester, Map<String, dynamic> s) async {
-    await tester.enterText(find.byType(TextField), invite(s));
+    await tester.enterText(find.byType(TextField), await invite(s));
     await tap(tester, find.text('Open my person’s session'));
     await waitFor(tester, find.byType(CupertinoTabBar));
   }
@@ -210,22 +215,15 @@ void main() {
     expect(find.text('Start safety session'), findsNothing);
     await tester.enterText(find.byType(TextField), 'invalid');
     await tap(tester, find.text('Open my person’s session'));
-    await waitFor(tester, find.text('Paste the private guardian link.'));
+    await waitFor(tester, find.textContaining('10-character pairing code'));
     final s = await create();
-    await tester.enterText(
-      find.byType(TextField),
-      invite(s).replaceFirst(kazeBackendUrl, 'https://other.example'),
-    );
-    await tap(tester, find.text('Open my person’s session'));
-    await waitFor(tester, find.textContaining('different KAZE service'));
-    await tester.enterText(
-      find.byType(TextField),
-      invite(s).replaceFirst(s['guardianToken'] as String, 'x' * 43),
-    );
+    final expiredCode = await invite(s);
+    await control({'advanceMs': 300001});
+    await tester.enterText(find.byType(TextField), expiredCode);
     await tap(tester, find.text('Open my person’s session'));
     await waitFor(
       tester,
-      find.textContaining('Invalid, revoked, or expired access'),
+      find.textContaining('Pairing code is invalid, expired or already used'),
     );
     await join(tester, s);
     await waitFor(tester, find.textContaining('Trail stays private'));
@@ -369,7 +367,7 @@ void main() {
   );
 
   testWidgets(
-    'iOS landscape, large text, licenses and removing a guardian link',
+    'iOS landscape, large text, licenses and removing guardian access',
     (tester) async {
       await launch(tester);
       final s = await create(live: true);
@@ -415,7 +413,7 @@ void main() {
       await capture(tester, '13-map-licenses');
       await tester.pageBack();
       await tester.pump(const Duration(milliseconds: 500));
-      await tap(tester, find.text('Remove this guardian link'));
+      await tap(tester, find.text('Remove guardian access'));
       await waitFor(tester, find.text('Join as guardian'));
       expect(await storage.read(key: 'session'), isNull);
       final active = await request(path(s), token: s['ownerToken'] as String);

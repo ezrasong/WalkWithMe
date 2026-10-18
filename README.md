@@ -31,7 +31,7 @@ cd ..
 
 ## Use
 
-Start a session on the phone, open KAZE on the paired watch, and share the guardian link from Settings. The watch uses the phone's Bluetooth connection; the phone can use Wi-Fi or cellular data.
+Start a session on the phone and open KAZE on the paired watch. In Settings, choose **Show guardian QR code**. Your guardian chooses **Scan QR code** on their iPhone or Android, or enters the short pairing code. Codes work once for five minutes; both phones must use the same KAZE service. The watch uses the phone's Bluetooth connection; the phone can use Wi-Fi or cellular data. See [guardian pairing](docs/GUARDIAN_PAIRING.md).
 
 Wearer recording runs on Android. Android guardians can opt into **Background guardian alerts** after joining: a visible native service checks server status and posts a notification after confirmed nonresponse, even while the Flutter screen is closed. Allow notifications and background battery use. Network loss is reported separately; it never becomes a presumed safety alert. Force-stop, reboot, restricted battery use or blocked notifications can interrupt delivery. Reopen KAZE and re-enable monitoring after force-stop or reboot. This is background polling, not remote push.
 
