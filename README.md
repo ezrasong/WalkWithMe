@@ -14,7 +14,9 @@ Built with Flutter for Android and iOS, plus a native Wear OS companion. Tested 
 | Pocket motion | Experimental relative movement from Android sensors, with optional watch activity checks. Recording starts anywhere without a manual calibration walk. Room, floor, geographic origin and north remain unknown; walking accuracy is unverified. |
 | Indoor camera | **Camera + motion diagram (no indoor AR)** shows a local camera and a separate relative diagram. It cannot align a trail to the floor or navigate between rooms. |
 | Outdoor camera | Experimental ARKit/ARCore alignment needs accurate outdoor positions and a 30–100 m registration walk. Optional Android Geospatial and approximate GPS/compass preview have separate requirements. Physical accuracy remains unverified. |
-| Filming demo | Enable **Presentation mode** in Settings for guardian camera practice or a shared simulated walk with a repeatable 40-second alert take. Turning it off hides all demo controls, closes demo cameras, hides simulated session data and stops simulated guardian notifications on that phone. Live sessions remain available. |
+| Filming and camera practice | Enable **Presentation mode** in Settings for guardian camera practice or a shared simulated walk with a repeatable 40-second alert take. Turning it off hides all presentation controls, closes preview cameras, hides simulated session data and stops simulated guardian notifications on that phone. Live sessions remain available. |
+
+The controls are named **Presentation mode**, **Camera walk preview** and **Start shared walk**. On-screen presentation copy omits the word "demo"; generated trails remain labelled simulated, and tracking limitations remain visible. Older generated sessions display **Virtual wearer** instead of the historical name with a parenthetical suffix. Turning presentation mode off hides simulated content locally without deleting the server session or changing its deadlines.
 
 A freely pocketed phone does not see the rooms it passes through. Its inertial sensors can estimate relative movement, but cannot identify an arbitrary starting room or match that movement to a second phone's camera. Walking around alone does not create a visual indoor map in this build. No advance mapping is needed for relative recording; universal pocket-only indoor AR localization is not implemented.
 
@@ -46,6 +48,8 @@ cd ..
 ## Use
 
 Start a session on the phone and open WalkWithMe on the paired watch. In Settings, choose **Show guardian QR code**. Your guardian chooses **Scan QR code** on their iPhone or Android, or enters the short pairing code. Codes work once for five minutes; both phones must use the same WalkWithMe service. The watch uses the phone's Bluetooth connection; the phone can use Wi-Fi or cellular data. See [guardian pairing](docs/GUARDIAN_PAIRING.md).
+
+Android phone and Wear OS check-in reminders request six vibration pulses over eight seconds, with an active watch receiving the reminder first and the phone as fallback. Existing vibration opt-outs, notification settings and system restrictions still apply. iPhone vibration duration is controlled by iOS.
 
 Wearer recording runs on Android. Android guardians can opt into **Background guardian alerts** after joining: a visible native service checks server status and posts a notification after confirmed nonresponse, even while the Flutter screen is closed. Allow notifications and background battery use. Network loss is reported separately; it never becomes a presumed safety alert. Force-stop, reboot, restricted battery use or blocked notifications can interrupt delivery. Reopen WalkWithMe and re-enable monitoring after force-stop or reboot. This is background polling, not remote push.
 
