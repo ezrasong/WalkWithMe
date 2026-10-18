@@ -64,12 +64,17 @@ public final class Transport {
     public static void saveClock(Context c, JSONObject result, long requestStart) {
         long received = System.currentTimeMillis();
         long offset = result.optLong("serverNow", received) - (requestStart + (received - requestStart) / 2);
-        var edit = Config.prefs(c).edit().putLong("clockOffset", offset).putLong("dueAt", result.optLong("dueAt"))
+        var edit = Config.prefs(c).edit().putLong("clockRoundTrip", Math.max(0, received - requestStart)).putLong("clockOffset", offset).putLong("dueAt", result.optLong("dueAt"))
             .putLong("graceSeconds", result.optLong("graceSeconds", 30)).putString("phase", result.optString("phase", "armed")).putLong("lastSync", received);
         if (result.has("expiresAt")) edit.putLong("expiresAt", result.optLong("expiresAt"));
         if (result.has("createdAt")) edit.putLong("createdAt", result.optLong("createdAt"));
         if (result.has("lastCheckInAt")) edit.putLong("lastCheckInAt", result.optLong("lastCheckInAt"));
         edit.apply();
+    }
+    public static long clockUncertainty(Context c) {
+        var prefs = Config.prefs(c);
+        long age = Math.abs(System.currentTimeMillis() - prefs.getLong("lastSync", 0));
+        return Math.min(5000, 10 + prefs.getLong("clockRoundTrip", 10000) / 2 + age / 10000);
     }
     public static long serverNow(Context c) { return System.currentTimeMillis() + Config.prefs(c).getLong("clockOffset", 0); }
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'session.dart';
+import 'relative_motion.dart';
 
 class MotionCapturePage extends StatefulWidget {
   final SessionController session;
@@ -68,6 +69,24 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
       }
     } finally {
       reading = false;
+    }
+  }
+
+  Future<void> consent(bool enabled) async {
+    if (!authorized || busy) return;
+    setState(() => busy = true);
+    try {
+      await widget.session.api(
+        action: 'motion-consent',
+        body: {'enabled': enabled, 'confirm': true},
+      );
+      await widget.session.refresh();
+    } catch (_) {
+      if (mounted) {
+        setState(() => message = 'Motion sharing change was not confirmed.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -137,6 +156,17 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
             'Motion streaming starts automatically with each wearer session over Wi-Fi or cellular. No raw capture is saved by default. No camera is used.',
           ),
           const SizedBox(height: 16),
+          SwitchListTile(
+            title: const Text('Retain and share relative research trail'),
+            subtitle: const Text(
+              'Keep up to 4096 derived points until session expiry. Share under this session’s guardian access rules. Unknown room, floor and alignment remain unknown. Turning off deletes the retained relative trail; raw uploads remain transient.',
+            ),
+            value: widget.session.snapshot?['motionSharingConsent'] == true,
+            onChanged: authorized && !busy ? consent : null,
+          ),
+          RelativeMotionCard(
+            motion: widget.session.snapshot?['relativeMotion'] as Map?,
+          ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Evaluate a manual capture on the backend'),
@@ -216,7 +246,7 @@ class _MotionCapturePageState extends State<MotionCapturePage> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Optional manual captures keep a local copy for up to 3 minutes; export it before ending the safety session. Each batch estimates separate relative motion. Accuracy is unverified. Shared locations, guardian guidance and check-in deadlines are unchanged.',
+            'Optional manual captures keep a local copy for up to 3 minutes; export it before ending the safety session. Supported overlapping batches form a relative research preview when retention is enabled. Gaps and restarts have separate origins. Pocket walking accuracy is unverified. Geographic locations and check-in deadlines are unchanged.',
           ),
         ],
       ),

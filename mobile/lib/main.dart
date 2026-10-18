@@ -15,6 +15,8 @@ import 'direction_preview.dart';
 import 'guardian_ar.dart';
 import 'guardian_pairing.dart';
 import 'motion_capture.dart';
+import 'relative_motion.dart';
+import 'relative_motion_camera.dart';
 import 'device_setup.dart';
 import 'trail_map.dart';
 import 'backend.dart';
@@ -472,7 +474,7 @@ class _SessionScreenState extends State<SessionScreen>
             value: consent,
             onChanged: (v) => setState(() => consent = v!),
             title: const Text(
-              'I agree to record this session on my phone and paired watch, send compressed phone motion over Wi-Fi or cellular for trail evaluation, and share its trail after nonresponse with my chosen guardian. Motion streaming can be stopped in Settings. Data expires after 8 hours.',
+              'I agree to record this session on my phone and paired watch, send compressed phone motion over Wi-Fi or cellular for research trail estimates, retain a bounded relative trail, and share it after nonresponse with my chosen guardian. Room, floor and camera alignment can remain unknown. Motion streaming can be stopped in Settings. Data expires after 8 hours.',
             ),
           ),
           CheckboxListTile.adaptive(
@@ -650,6 +652,11 @@ class _SessionScreenState extends State<SessionScreen>
       ),
       if (s['sensorMode'] == 'simulated')
         note('Simulated readings · not hardware measurements'),
+      if (s['relativeMotion']?['available'] == true)
+        OutlinedButton(
+          onPressed: showSessionDetails,
+          child: const Text('Pocket motion trail & camera'),
+        ),
       if (s['demoWalk'] != null)
         OutlinedButton(
           onPressed: showSessionDetails,
@@ -986,7 +993,15 @@ class _SessionScreenState extends State<SessionScreen>
                     ? 'Live sharing enabled for this session.'
                     : 'Guardian sharing only after nonresponse.',
               ),
+              RelativeMotionCard(motion: s['relativeMotion'] as Map?),
               if (c.guardian && phase == 'alert') ...[
+                if (s['relativeMotion']?['available'] == true)
+                  OutlinedButton.icon(
+                    onPressed: () =>
+                        openGuardianCamera(RelativeMotionCamera(session: c)),
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('Pocket motion camera preview'),
+                  ),
                 FilledButton(
                   onPressed: c.busy || s['acknowledgedAt'] != null
                       ? null

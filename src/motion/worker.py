@@ -5,6 +5,7 @@ import io
 import json
 import math
 import sys
+import re
 import torch
 
 from evaluate import read_capture_text, features, load_model, predict
@@ -21,21 +22,49 @@ def evaluate_batch(encoded, model):
     metadata, streams, quality = read_capture_text(raw.decode('utf-8'))
     if max(s[0][-1] for s in streams.values()) > 12:
         raise ValueError('Motion batch exceeds twelve seconds')
+    stream = None
+    if metadata.get('streamVersion') not in (None, 2):
+        raise ValueError('Unsupported stream version')
+    if metadata.get('streamVersion') == 2:
+        stream_id, sequence = metadata.get('streamId'), metadata.get('batchSequence')
+        origin, utc = metadata.get('streamStartedNs'), metadata.get('streamStartedUtcMs')
+        clock_error = metadata.get('clockUncertaintyMs')
+        if (not isinstance(stream_id, str) or not re.fullmatch(r'[a-f0-9-]{36}', stream_id) or
+            type(sequence) is not int or not 0 <= sequence <= 100000 or
+            type(origin) is not int or not 0 <= origin <= metadata['startedNs'] <= 2**53-1 or
+            type(utc) is not int or not 0 < utc < 2**53 or
+            type(clock_error) is not int or not 0 <= clock_error <= 5000):
+            raise ValueError('Invalid stream identity or clock')
+        offset = (metadata['startedNs'] - origin) / 1e9
+        if type(metadata.get('startedUtcMs')) is not int or abs(metadata['startedUtcMs'] - (utc + offset * 1000)) > 2:
+            raise ValueError('Inconsistent monotonic and UTC mapping')
+        if offset > 86400:
+            raise ValueError('Stream exceeds session duration')
+        # Grid and model stride share the stream monotonic origin. Overlap is
+        # context, not another displacement; the server commits each time once.
+        streams = {k: (stamps + offset, values) for k, (stamps, values) in streams.items()}
+        stream = {'id': stream_id, 'sequence': sequence, 'startedNs': origin,
+            'startedUtcMs': utc, 'clockUncertaintyMs': clock_error}
     grid, data, good, coverage = features(streams)
-    segments, performance = predict(grid, data, good, coverage, model)
+    if stream:
+        # Align 20 Hz prediction ends across arbitrary batch boundary jitter.
+        shift = (-round(grid[0] / .005)) % 10
+        grid, data, good, coverage = grid[shift:], data[shift:], good[shift:], coverage[shift:]
+    segments, performance = predict(grid, data, good, coverage, model, stationary_gate=bool(stream))
     distance = sum(sum(math.hypot(b['x']-a['x'], b['y']-a['y'])
         for a, b in zip(s, s[1:])) for s in segments)
-    # Return at most 5 points/second. Model input stays at its required 200 Hz.
+    # Streaming returns 20 Hz velocities for integration; retained shared points
+    # are reduced by the server. Legacy batch previews return at most 5 Hz.
     reduced = []
     for segment in segments:
-        points = segment[::4]
+        points = segment if stream else segment[::4]
         if points[-1] is not segment[-1]:
             points.append(segment[-1])
         reduced.append(points)
     return {'researchOnly': True, 'guidanceAllowed': False, 'geographic': False,
         'fieldAccuracyVerified': False, 'confidenceCalibrated': False,
         'frame': metadata['frame'], 'captureStartedUtcMs': metadata.get('startedUtcMs'),
-        'independentBatchOrigin': True, 'estimatedDistanceMeters': distance,
+        'independentBatchOrigin': stream is None, 'stream': stream, 'estimatedDistanceMeters': distance,
         'quality': quality, 'performance': performance, 'segments': reduced}
 
 

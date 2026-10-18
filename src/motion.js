@@ -29,7 +29,7 @@ export class MotionEvaluator {
     child.stdout.on('data', value => {
       if (child !== this.child) return;
       this.buffer += value;
-      if (this.buffer.length > 100000) return this.fail();
+      if (this.buffer.length > 180000) return this.fail();
       let end;
       while ((end = this.buffer.indexOf('\n')) >= 0) {
         const line = this.buffer.slice(0, end); this.buffer = this.buffer.slice(end + 1);

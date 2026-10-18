@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'trail_map.dart';
+import 'relative_motion.dart';
 
 class CameraNavigation extends StatelessWidget {
   final Widget camera;
@@ -212,6 +213,12 @@ class CameraNavigation extends StatelessWidget {
                                   details,
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
+                                if (snapshot['relativeMotion']?['available'] ==
+                                    true)
+                                  RelativeMotionCard(
+                                    motion: snapshot['relativeMotion'] as Map?,
+                                    compact: true,
+                                  ),
                                 const SizedBox(height: 8),
                                 SizedBox(
                                   height: (size.maxHeight * .2).clamp(100, 180),

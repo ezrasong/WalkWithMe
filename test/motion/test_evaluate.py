@@ -116,6 +116,43 @@ class MotionEvaluationTests(unittest.TestCase):
         self.assertFalse(report['scaleAdjusted'])
         with self.assertRaisesRegex(ValueError,'unsupported'):compare_reference([segments[0][:10],segments[0][11:]],ref)
 
+
+
+    def test_changing_device_posture_is_removed_by_quaternion_preprocessing(self):
+        stamps=np.arange(0,4.005,.005)
+        angles=np.linspace(0,np.pi,len(stamps))
+        q=np.c_[np.cos(angles/2),np.sin(angles/2),np.zeros((len(stamps),2))]
+        inverse=q.copy();inverse[:,1:]*=-1
+        world_accel=np.tile([.2,.3,9.80665],(len(stamps),1))
+        world_gyro=np.tile([.1,.2,.3],(len(stamps),1))
+        streams={'accel':(stamps,rotate(inverse,world_accel)),
+            'gyro':(stamps,rotate(inverse,world_gyro)),'rotation':(stamps,q)}
+        _,data,good,_=features(streams)
+        np.testing.assert_allclose(data[:,:3],world_gyro,atol=1e-5)
+        np.testing.assert_allclose(data[:,3:],world_accel,atol=1e-5)
+        self.assertTrue(good.all())
+
+    def test_stream_overlap_uses_one_monotonic_grid_and_stationary_gate(self):
+        raw = self.path.read_text(encoding='utf8')
+        metadata = json.loads(raw.splitlines()[0][2:])
+        metadata.update(streamVersion=2, streamId='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            batchSequence=0, streamStartedNs=metadata['startedNs'], streamStartedUtcMs=1792216000000,
+            startedUtcMs=1792216000000, clockUncertaintyMs=20)
+        def run(offset, sequence):
+            lines = raw.splitlines()
+            m = dict(metadata, startedNs=metadata['startedNs']+round(offset*1e9), startedUtcMs=metadata['startedUtcMs']+round(offset*1000), batchSequence=sequence)
+            rows = [str(int(line.split(',')[0])+round(offset*1e9))+','+line.split(',',1)[1] for line in lines[2:-1]]
+            text = '# '+json.dumps(m)+'\n'+lines[1]+'\n'+'\n'.join(rows)+'\n'+lines[-1]+'\n'
+            return evaluate_batch(base64.b64encode(gzip.compress(text.encode())).decode(), ConstantVelocity())
+        first, second = run(0,0), run(2.703,1)
+        self.assertFalse(first['independentBatchOrigin'])
+        self.assertEqual(second['stream']['sequence'],1)
+        stamps = [p['t'] for p in second['segments'][0]]
+        self.assertTrue(all(abs(t*20-round(t*20)) < 1e-6 for t in stamps))
+        self.assertLess(stamps[0],first['segments'][0][-1]['t'])
+        self.assertTrue(all(p['stationary'] and p['vx']==0 for p in first['segments'][0]))
+        self.assertEqual(first['estimatedDistanceMeters'],0)
+
     @unittest.skipUnless((ROOT/'ronin_resnet.zip').exists(),'Run setup.py for the checkpoint smoke test')
     def test_actual_pretrained_weights_load_and_run_with_finite_outputs(self):
         _,streams,_=read_capture(self.path)

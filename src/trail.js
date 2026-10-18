@@ -1,6 +1,6 @@
 // Coordinates are local metres east/north of an explicitly chosen starting point.
 // Uncertainty is a conservative engineering budget, NOT a calibrated probability.
-export function reconstruct(events, { strideMeters = 0.72, useCamera = true } = {}) {
+export function reconstruct(events, { strideMeters = 0.72, useCamera = true, sensorMode } = {}) {
   const sorted = [...events].sort((a, b) => a.at - b.at || a.seq - b.seq);
   const candidates = useCamera ? sorted.filter(e => e.type === 'vision' && e.tracking && e.quality >= 0.6 &&
     e.at > e.fromAt && e.at - e.fromAt <= 1500 &&
@@ -20,6 +20,7 @@ export function reconstruct(events, { strideMeters = 0.72, useCamera = true } = 
     if (e.type === 'step' && e.source === 'watch') { watchSteps++; continue; }
     if (e.type === 'step' && e.source === 'phone') {
       phoneSteps++;
+      if (sensorMode === 'device' || e.headingBasis === 'device-posture') continue;
       // Camera and PDR measure the same motion. Never add both for one interval.
       while (cameraCursor < camera.length && camera[cameraCursor].at < e.at) cameraCursor++;
       const v = camera[cameraCursor];
@@ -54,7 +55,7 @@ export function reconstruct(events, { strideMeters = 0.72, useCamera = true } = 
   });
   const stepDisagreement = watchSteps >= 5 && phoneSteps >= 5 && Math.abs(watchSteps - phoneSteps) / Math.max(watchSteps, phoneSteps) > 0.35;
   if (stepDisagreement) uncertainty += Math.abs(watchSteps - phoneSteps) * strideMeters * 0.5;
-  const warnings = ['Approximate path, not a floor plan. Origin and orientation must match the chosen entrance.'];
+  const warnings = [sensorMode === 'device' ? 'Phone posture is not walking direction. Steps are counted but do not locate the wearer. See the relative motion preview when available.' : 'Approximate path, not a floor plan. Origin and orientation must match the chosen entrance.'];
   if (stepDisagreement) warnings.push('Phone/watch step counts disagree. Their positions were not averaged.');
   if (!phoneSteps && !camera.length) warnings.push('No horizontal movement evidence. Watch steps alone do not locate the wearer.');
   if (camera.length) warnings.push('Camera segments are relative visual estimates, not verified locations or independent GPS fixes.');

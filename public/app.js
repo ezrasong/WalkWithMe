@@ -87,7 +87,9 @@ function render() {
     const url=new URL('/guardian',location.origin);url.hash=new URLSearchParams({session:credentials.id,token:credentials.guardianToken});$('guardian-link').href=url.href;
     $('phone-config').value=JSON.stringify({baseUrl:location.origin,id:credentials.id,ownerToken:credentials.token,watchToken:credentials.watchToken});
   } else if(!guardian) $('pairing-card').hidden=true;
-  draw();tick();selectPanel(panel);
+  $('motion-consent-controls').hidden=guardian||state.phase==='resolved'||state.sensorMode!=='device';
+  $('motion-consent').checked=state.motionSharingConsent===true;
+  drawMotion();draw();tick();selectPanel(panel);
 }
 async function poll() {
   try {state=await api();lastResponse=Date.now();render();$('connection-status').textContent='Server connected. Only uploaded readings are available remotely.';}
@@ -101,7 +103,7 @@ function begin() {poll();setInterval(poll,2000);setInterval(tick,500);}
 async function create(simulated=false) {
   const form=$('create-form');if(!form.reportValidity())return;
   const fields=Object.fromEntries(new FormData(form));
-  try { const response=await fetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fields.name,consent:true,simulation:true,sensorMode:simulated?'simulated':'device',intervalSeconds:simulated?15:Number(fields.intervalSeconds),graceSeconds:simulated?5:Number(fields.graceSeconds),liveSharing:$('live-sharing').checked,liveSharingConsent:$('live-sharing').checked})});
+  try { const response=await fetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fields.name,consent:true,simulation:true,motionSharingConsent:!simulated,sensorMode:simulated?'simulated':'device',intervalSeconds:simulated?15:Number(fields.intervalSeconds),graceSeconds:simulated?5:Number(fields.graceSeconds),liveSharing:$('live-sharing').checked,liveSharingConsent:$('live-sharing').checked})});
     const data=await response.json();if(!response.ok)throw new Error(data.error);
     credentials={id:data.id,token:data.ownerToken,guardianToken:data.guardianToken,watchToken:data.watchToken};sessionStorage.setItem(key,JSON.stringify(credentials));begin();
   }catch(e){notify(e.message);}
@@ -140,3 +142,20 @@ $('open-ar').onclick=async()=>{if(!guardian||!state?.shared||state.phase!=='aler
   }catch(e){closeAr();notify(e.message);}};
 $('close-ar').onclick=closeAr;document.addEventListener('visibilitychange',()=>{if(document.hidden)closeAr();});window.addEventListener('pagehide',closeAr);
 if(credentials)begin();else if(guardian){$('setup').hidden=true;notify('Open the private guardian link from the wearer.');}
+
+function drawMotion() {
+  const motion=state?.relativeMotion, sections=motion?.segments??[], section=sections.at(-1);
+  $('relative-motion').hidden=!state?.shared||!motion?.available;
+  $('motion-diagram').replaceChildren();
+  if(!motion?.available)return;
+  $('motion-status').textContent=`${motion.stale?'STALE · ':''}${sections.length} separate sections · latest section shown. Growing drift budget: ${motion.driftBudgetMeters.toFixed(1)} m (uncalibrated). Accuracy unverified.`;
+  $('motion-activity').textContent=`Watch activity: ${section?.activity?.status??'unavailable'}. No independent position correction.${section?.supported===false?' Conflicting activity: diagram withheld.':''}`;
+  const points=section?.supported===false?[]:section?.points??[];
+  if(!points.length)return;
+  const xs=points.map(p=>p.x),ys=points.map(p=>p.y),xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);
+  const scale=Math.min(296/Math.max(2,xmax-xmin),136/Math.max(2,ymax-ymin));
+  const line=document.createElementNS('http://www.w3.org/2000/svg','path');
+  let drawing=false;line.setAttribute('d',points.map(p=>{if(p.supported===false){drawing=false;return '';}const command=drawing?'L':'M';drawing=true;return `${command}${160+(p.x-(xmin+xmax)/2)*scale},${80-(p.y-(ymin+ymax)/2)*scale}`;}).join(' '));
+  line.setAttribute('fill','none');line.setAttribute('stroke','#ad59c4');line.setAttribute('stroke-width','3');$('motion-diagram').append(line);
+}
+$('motion-consent').onchange=async()=>{try{await api('motion-consent',{enabled:$('motion-consent').checked,confirm:true});await poll();}catch(e){notify(e.message);await poll();}};

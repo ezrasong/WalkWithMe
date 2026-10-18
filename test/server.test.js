@@ -343,3 +343,41 @@ test('activity records explicit server-accepted responses and server escalation,
  assert.deepEqual(snapshot.activity.map(a=>a.action),['started','check-in']);assert.equal(snapshot.lastCheckInAt,f.time());
  f.jump(8000);assert.equal((await f.request(url,{token:s.ownerToken})).body.activity.at(-1).action,'alert');
 });
+
+test('derived motion requires separate retention consent, obeys sharing gates and deletes on withdrawal/expiry', async t => {
+  const f = await fixture(t, { motion: { close() {}, async evaluate() { return result; } } });
+  const s=await f.create(), url=`/api/sessions/${s.id}`;
+  let result={captureStartedUtcMs:f.time(),stream:{id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',sequence:0,startedNs:1000000000,startedUtcMs:f.time(),clockUncertaintyMs:20},
+    segments:[Array.from({length:41},(_,i)=>({t:1+i*.05,vx:1,vy:0,stationary:false}))]};
+  const send=()=>f.request(`${url}/motion`,{token:s.ownerToken,body:motionBatch,headers:motionHeaders});
+  assert.equal((await send()).body.retained,false);assert.equal(f.app.store.motion(s.id),null);
+  for(const token of [s.watchToken,s.guardianToken])assert.equal((await f.request(`${url}/motion-consent`,{token,body:{enabled:true,confirm:true}})).status,401);
+  assert.equal((await f.request(`${url}/motion-consent`,{token:s.ownerToken,body:{enabled:true}})).status,400);
+  await f.request(`${url}/motion-consent`,{token:s.ownerToken,body:{enabled:true,confirm:true}});
+  f.jump(8000);assert.equal((await send()).body.retained,true);assert.ok(f.app.store.motion(s.id));
+  assert.equal((await f.request(url,{token:s.watchToken})).body.relativeMotion,null);
+  const guardian=(await f.request(url,{token:s.guardianToken})).body;
+  assert.equal(guardian.relativeMotion.available,true);assert.equal(guardian.relativeMotion.guidanceAllowed,false);
+  const ar=(await f.request(`${url}/ar`,{token:s.guardianToken})).body;
+  assert.equal(ar.available,false);assert.deepEqual(ar.relativeMotion,guardian.relativeMotion);
+  await f.request(`${url}/motion-consent`,{token:s.ownerToken,body:{enabled:false,confirm:true}});
+  assert.equal(f.app.store.motion(s.id),null);
+  await f.request(`${url}/motion-consent`,{token:s.ownerToken,body:{enabled:true,confirm:true}});
+  f.jump(8000);result.stream.sequence++;await send();
+  await f.request(`${url}/revoke-guardian`,{token:s.ownerToken,body:{confirm:true}});
+  assert.equal((await f.request(url,{token:s.guardianToken})).status,401);
+  f.jump(8*3600000);assert.equal(f.app.store.motion(s.id),null);
+});
+
+test('motion sharing withdrawal while inference yields cannot restore retained evidence',async t=>{
+ let finish,started;const ready=new Promise(resolve=>started=resolve);
+ const f=await fixture(t,{motion:{close(){},evaluate(){started();return new Promise(resolve=>finish=resolve);}}});
+ const s=await f.create(), url=`/api/sessions/${s.id}`;
+ const consent=enabled=>f.request(`${url}/motion-consent`,{token:s.ownerToken,body:{enabled,confirm:true}});
+ await consent(true);
+ const pending=f.request(`${url}/motion`,{token:s.ownerToken,body:motionBatch,headers:motionHeaders});await ready;
+ assert.equal((await f.request(url,{token:s.guardianToken})).body.relativeMotion,null);
+ await consent(false);await consent(true);
+ finish({captureStartedUtcMs:f.time(),stream:{}});
+ assert.equal((await pending).body.retained,false);assert.equal(f.app.store.motion(s.id),null);
+});

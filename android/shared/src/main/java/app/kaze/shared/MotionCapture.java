@@ -113,14 +113,14 @@ public final class MotionCapture implements SensorEventListener {
                         || Transport.serverNow(context) >= Config.prefs(context).getLong("expiresAt", 0)) { stop("session-ended"); return; }
                     try {
                         if (log != null) log.flush();
-                        message(context, automatic ? "Automatic motion streaming active · Wi-Fi or cellular. No raw capture saved."
+                        message(context, automatic ? "Automatic motion streaming active · " + samples + " samples · Wi-Fi or cellular. No raw capture saved."
                             : "Capturing local motion: " + samples + " samples. Stops after 3 minutes.");
                     }
                     catch (Exception e) { stop("storage-error"); return; }
                     handler.postDelayed(this, 1000);
                 }
             } }, 1000);
-            message(context, automatic ? "Automatic motion streaming active · Wi-Fi or cellular. No raw capture saved."
+            message(context, automatic ? "Automatic motion streaming active · " + samples + " samples · Wi-Fi or cellular. No raw capture saved."
                 : "Capturing local motion. Stops after 3 minutes.");
         } catch (Exception e) { stop("sensor-start-failed"); if (localCapture) delete(context); throw e; }
     }

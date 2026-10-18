@@ -491,6 +491,7 @@ class SessionController extends ChangeNotifier {
         'consent': true,
         'simulation': true,
         'sensorMode': 'device',
+        'motionSharingConsent': true,
         'intervalSeconds': interval,
         'graceSeconds': grace,
         'liveSharing': live,

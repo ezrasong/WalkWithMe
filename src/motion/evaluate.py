@@ -173,7 +173,7 @@ def load_model():
     return model
 
 
-def predict(grid, data, good, coverage, model):
+def predict(grid, data, good, coverage, model, stationary_gate=False):
     ends = np.array([i for i in range(200, len(grid), 10) if good[i-200:i+1].all() and coverage[i]])
     if len(ends) < 2:
         raise ValueError('No adequate continuous windows; missing data remains a gap')
@@ -190,6 +190,13 @@ def predict(grid, data, good, coverage, model):
     elapsed = time.perf_counter() - started
     segments, segment, previous = [], None, None
     for index, velocity in zip(ends, velocities):
+        window = data[index-200:index]
+        stationary = bool(stationary_gate and
+            np.linalg.norm(np.std(window[:, 3:], axis=0)) < .12 and
+            np.mean(np.linalg.norm(window[:, :3], axis=1)) < .035 and
+            abs(np.mean(np.linalg.norm(window[:, 3:], axis=1)) - 9.80665) < .3)
+        if stationary:
+            velocity = np.zeros(2)
         if np.linalg.norm(velocity) > 5:
             segment = None; previous = None; continue
         if previous is None or index != previous[0] + 10:
@@ -197,7 +204,8 @@ def predict(grid, data, good, coverage, model):
         else:
             position += .5 * (velocity + previous[1]) * (grid[index] - grid[previous[0]])
         segment.append({'t': float(grid[index]), 'x': float(position[0]), 'y': float(position[1]),
-            'height': None, 'estimated': True, 'uncertaintyMeters': None})
+            'height': None, 'estimated': True, 'uncertaintyMeters': None,
+            'vx': float(velocity[0]), 'vy': float(velocity[1]), 'stationary': stationary})
         previous = (index, velocity)
     segments = [s for s in segments if len(s) >= 2]
     if not segments:
@@ -251,7 +259,7 @@ def main():
         metadata, streams, quality = read_capture(args.capture)
         grid, data, good, coverage = features(streams)
         model = load_model()
-        segments, performance = predict(grid, data, good, coverage, model)
+        segments, performance = predict(grid, data, good, coverage, model, stationary_gate=True)
         reference = compare_reference(segments, args.reference) if args.reference else None
         distance = sum(sum(math.hypot(b['x']-a['x'], b['y']-a['y']) for a,b in zip(s,s[1:])) for s in segments)
         report = {'version': 1, 'researchOnly': True, 'guidanceAllowed': False,

@@ -39,6 +39,15 @@ export function validateEvent(input, session, role, now) {
     case 'step':
       if (e.source === 'camera') throw new Problem(400, 'Camera cannot report steps');
       e.heading = number(input.heading, 0, 360, 'heading');
+      if (input.headingBasis != null) {
+        if (input.headingBasis !== 'device-posture') throw new Problem(400, 'Invalid heading basis');
+        e.headingBasis = input.headingBasis;
+      }
+      if (input.stepMethod != null) {
+        if (!['android-step-detector', 'acceleration-threshold'].includes(input.stepMethod)) throw new Problem(400, 'Invalid step method');
+        e.stepMethod = input.stepMethod;
+      }
+      if (input.clockUncertaintyMs != null) e.clockUncertaintyMs = number(input.clockUncertaintyMs, 0, 5000, 'sensor clock uncertainty');
       if (input.length != null) e.length = number(input.length, 0.2, 1.5, 'stride');
       break;
     case 'pressure':

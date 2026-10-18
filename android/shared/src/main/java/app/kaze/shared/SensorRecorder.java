@@ -13,6 +13,7 @@ public final class SensorRecorder implements SensorEventListener {
     public interface Sink { void emit(String source, JSONObject event); }
     private final SensorManager manager;
     private final Config config;
+    private final Context context;
     private final Sink sink;
     private final String source;
     private final float[] accel = new float[3], magnetic = new float[3], rotation = new float[9], orientation = new float[3];
@@ -20,7 +21,7 @@ public final class SensorRecorder implements SensorEventListener {
     private double referenceAzimuth, heading;
     private long lastStep, lastPressure;
     private boolean nativeStep, rotationRegistered;
-    public SensorRecorder(Context c, Config config, Sink sink) { manager = (SensorManager)c.getSystemService(Context.SENSOR_SERVICE); this.config = config; this.sink = sink; source = config.watch ? "watch" : "phone"; heading = config.initialHeading; }
+    public SensorRecorder(Context c, Config config, Sink sink) { context = c; manager = (SensorManager)c.getSystemService(Context.SENSOR_SERVICE); this.config = config; this.sink = sink; source = config.watch ? "watch" : "phone"; heading = config.initialHeading; }
     public JSONArray start() {
         JSONArray available = new JSONArray();
         int[] types = { Sensor.TYPE_ACCELEROMETER, Sensor.TYPE_MAGNETIC_FIELD, Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_PRESSURE, Sensor.TYPE_STEP_DETECTOR };
@@ -40,13 +41,12 @@ public final class SensorRecorder implements SensorEventListener {
         heading = ((az - referenceAzimuth) * 180 / Math.PI + config.initialHeading + 720) % 360;
     }
     private void step(long at) {
-        if (!calibrated && !config.watch) return; // Never fabricate a heading when orientation sensors are absent.
         if (at - lastStep < 260) return;
         lastStep = at;
-        try { sink.emit(source, new JSONObject().put("type", "step").put("heading", heading).put("length", config.stride)); } catch (Exception ignored) {}
+        try { sink.emit(source, new JSONObject().put("type", "step").put("at", Transport.serverNow(context) - Math.max(0, SystemClock.elapsedRealtime() - at)).put("heading", heading).put("length", config.stride).put("headingBasis", "device-posture").put("stepMethod", nativeStep ? "android-step-detector" : "acceleration-threshold").put("clockUncertaintyMs", Transport.clockUncertainty(context))); } catch (Exception ignored) {}
     }
     @Override public void onSensorChanged(SensorEvent e) {
-        long at = SystemClock.elapsedRealtime();
+        long at = e.timestamp / 1000000L;
         switch (e.sensor.getType()) {
             case Sensor.TYPE_ACCELEROMETER:
                 System.arraycopy(e.values, 0, accel, 0, 3); hasAccel = true;

@@ -11,6 +11,7 @@ import { geographicTrail } from './locations.js';
 import { guardianArTrail } from './ar.js';
 import { applePushFromEnv, GuardianPushDelivery } from './apple-push.js';
 import { MotionEvaluator } from './motion.js';
+import { appendMotion, relativeMotion } from './motion-trail.js';
 import { GuardianInvites } from './guardian-invites.js';
 import { advanceDemo, controlDemo, demoEvents } from './demo-walk.js';
 
@@ -57,6 +58,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
       demoWalk: shared && demoWalk ? { runId: demoWalk.runId, running: demoWalk.running, distance: demoWalk.distance, total: demoWalk.total, speed: demoWalk.speed } : null,
       activity: shared ? store.activity(s.id) : [],
       guardianConnected: !!s.guardianSeenAt && now() - s.guardianSeenAt < 15000,
+      relativeMotion: shared ? relativeMotion(store.motion(s.id), events, now()) : null,
       trail: shared ? reconstruct(events, s) : null,
       withoutCamera: shared ? reconstruct(events, { ...s, useCamera: false }) : null,
       lastGps: geography?.latest ?? null };
@@ -104,7 +106,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
         const intervalSeconds = number(b.intervalSeconds ?? 120, 5, 3600, 'check-in interval');
         if (b.liveSharing === true && b.liveSharingConsent !== true) throw new Problem(400, 'Live sharing requires separate explicit consent');
         const s = { id: randomUUID(), name: label(b.name, 60, 'name'), origin: label(b.origin ?? 'Location services', 100, 'entrance'), simulation: true,
-          liveSharing: b.liveSharing === true,
+          liveSharing: b.liveSharing === true, motionSharingConsent: b.motionSharingConsent === true, motionConsentGeneration: 0,
           sensorMode: b.sensorMode === 'simulated' ? 'simulated' : 'device',
           createdAt: now(), expiresAt: now() + number(b.retentionHours ?? 8, 0.01, 24, 'retention') * 3600000,
           phase: 'armed', intervalSeconds, graceSeconds: number(b.graceSeconds ?? 30, 3, 300, 'grace period'),
@@ -112,7 +114,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           initialHeading: number(b.initialHeading ?? 0, 0, 360, 'initial heading'), ownerHash: hash(owner), guardianHash: hash(guardian), watchHash: hash(watch) };
         store.save(s); store.recordActivity(s.id, 'started', now(), 'owner'); return json(201, { ...snapshot(s, 'owner'), ownerToken: owner, guardianToken: guardian, watchToken: watch });
       }
-      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push|guardian-invite|motion|demo-walk))?$/.exec(url.pathname);
+      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push|guardian-invite|motion|motion-consent|demo-walk))?$/.exec(url.pathname);
       if (match) {
         const id = match[1], action = match[2]; let s = current(id);
         if (action === 'guardian-invite') {
@@ -146,6 +148,16 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           return json(200, { id: s.id, role: 'guardian', phase: s.phase,
             serverNow: now(), expiresAt: s.expiresAt, acknowledgedAt: s.acknowledgedAt ?? null });
         }
+        if (action === 'motion-consent') {
+          auth(req, s, ['owner']);
+          if (req.method !== 'POST') throw new Problem(405, 'Method not allowed');
+          const b = await body(req); s = current(id); auth(req, s, ['owner']);
+          if (s.phase === 'resolved' || s.sensorMode !== 'device') throw new Problem(409, 'Active device session required');
+          if (typeof b.enabled !== 'boolean' || b.confirm !== true) throw new Problem(400, 'Explicit motion retention and sharing consent required');
+          s.motionSharingConsent = b.enabled; s.motionConsentGeneration = (s.motionConsentGeneration ?? 0) + 1;
+          store.transaction(() => { store.save(s); if (!b.enabled) store.clearMotion(id); });
+          return json(200, snapshot(s, 'owner'));
+        }
         if (action === 'motion') {
           auth(req, s, ['owner']);
           if (req.method !== 'POST') throw new Problem(405, 'Method not allowed');
@@ -159,18 +171,22 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
             throw new Problem(400, 'Expected a gzip motion batch');
           if (motionLimits.has(id) && now() - motionLimits.get(id) < 8000) throw new Problem(429, 'Send motion batches at most once per eight seconds');
           motionLimits.set(id, now());
+          const consentGeneration = s.motionConsentGeneration ?? 0;
           const result = await motion.evaluate(compressed.toString('base64'));
           // Evaluation yields. Ending/deleting/expiring the session invalidates the result too.
           s = current(id); auth(req, s, ['owner']);
           if (s.phase === 'resolved') throw new Problem(409, 'Session has ended');
           number(result?.captureStartedUtcMs, Math.max(s.createdAt - 5000, now() - 60000), now() + 5000, 'motion batch time');
-          return json(200, { accepted: true, serverNow: now(), result });
+          if (s.motionSharingConsent && consentGeneration === (s.motionConsentGeneration ?? 0) && result.stream)
+            store.saveMotion(id, appendMotion(store.motion(id), result, now()));
+          return json(200, { accepted: true, serverNow: now(), result, retained: !!s.motionSharingConsent && consentGeneration === (s.motionConsentGeneration ?? 0) && !!result.stream });
         }
         if (action === 'ar') {
           auth(req, s, ['owner', 'guardian']);
           if (req.method !== 'GET') throw new Problem(405, 'Method not allowed');
           if (s.phase !== 'alert' && !(s.sensorMode === 'simulated' && s.demoWalk && s.liveSharing && s.phase !== 'resolved')) throw new Problem(409, 'An active assistance request is required');
-          return json(200, guardianArTrail([...store.events(s.id), ...demoEvents(s.demoWalk, now())], now(), { simulation: s.sensorMode === 'simulated' }));
+          const events = [...store.events(s.id), ...demoEvents(s.demoWalk, now())];
+          return json(200, { ...guardianArTrail(events, now(), { simulation: s.sensorMode === 'simulated' }), relativeMotion: relativeMotion(store.motion(id), events, now()) });
         }
         if (req.method === 'GET' && !action) {
           const role = auth(req, s, ['owner', 'guardian', 'watch']);
