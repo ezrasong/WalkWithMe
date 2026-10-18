@@ -275,7 +275,11 @@ class _SessionScreenState extends State<SessionScreen>
       pairingCode = TextEditingController();
   int tab = 0, interval = 120, grace = 30;
   int setupRole = Platform.isAndroid ? 0 : 1;
-  bool consent = false, live = false, tiles = true, showDemoControls = true;
+  bool consent = false, live = false, tiles = true;
+  bool get showDemoControls => c.demoMode;
+  bool get hiddenDemo =>
+      !showDemoControls && c.snapshot?['sensorMode'] == 'simulated';
+  MaterialPageRoute<void>? demoCameraRoute;
   Timer? clock;
   String lastMessage = '';
   bool get transientMessage => const [
@@ -288,21 +292,68 @@ class _SessionScreenState extends State<SessionScreen>
     WidgetsBinding.instance.addObserver(this);
     c.addListener(update);
     c.restore().then((_) => offerDeviceSetup());
-    c.storage
-        .read(key: 'showDemoControls')
-        .then((value) {
-          if (mounted) setState(() => showDemoControls = value != 'false');
-        })
-        .catchError((Object _) {});
     clock = Timer.periodic(const Duration(seconds: 1), (_) => update());
   }
 
   void setDemoControls(bool visible) {
-    setState(() => showDemoControls = visible);
-    c.storage
-        .write(key: 'showDemoControls', value: visible.toString())
-        .catchError((Object _) {});
+    unawaited(c.setDemoMode(visible));
+    if (hiddenDemo) setState(() => tab = 0);
+    if (!visible && demoCameraRoute?.navigator != null) {
+      demoCameraRoute!.navigator!.removeRoute(demoCameraRoute!);
+    }
+    if (hiddenDemo) ScaffoldMessenger.of(context).hideCurrentSnackBar();
   }
+
+  Widget demoModeSwitch() => SwitchListTile.adaptive(
+    contentPadding: EdgeInsets.zero,
+    title: const Text('Demo mode'),
+    subtitle: const Text(
+      'Enable guardian camera practice and shared simulated walks. Turning off hides all demo screens, controls and simulated session data on this phone. Live sessions stay available.',
+    ),
+    value: showDemoControls,
+    onChanged: setDemoControls,
+  );
+
+  Future<void> openPresentationSettings() => showModalBottomSheet<void>(
+    context: context,
+    useSafeArea: true,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) => SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: ListenableBuilder(
+        listenable: c,
+        builder: (_, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Settings', style: Theme.of(context).textTheme.titleLarge),
+            demoModeSwitch(),
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget hiddenDemoPage() => ListView(
+    padding: const EdgeInsets.all(24),
+    children: [
+      card([
+        const Text('No live session to display.'),
+        const Text('Your saved session is hidden on this phone.'),
+        TextButton.icon(
+          onPressed: openPresentationSettings,
+          icon: const Icon(Icons.settings_outlined),
+          label: const Text('Settings'),
+        ),
+        TextButton(onPressed: c.forget, child: const Text('Return to setup')),
+      ]),
+      const Text(indoorTrackingNotice),
+    ],
+  );
 
   Future<void> offerDeviceSetup() async {
     if (defaultTargetPlatform != TargetPlatform.android &&
@@ -424,6 +475,8 @@ class _SessionScreenState extends State<SessionScreen>
               Expanded(
                 child: c.access == null
                     ? onboarding()
+                    : hiddenDemo
+                    ? hiddenDemoPage()
                     : c.snapshot == null
                     ? waiting()
                     : [mapPage(), activityPage(), settingsPage()][tab],
@@ -450,7 +503,7 @@ class _SessionScreenState extends State<SessionScreen>
           ),
         ),
       ),
-      bottomNavigationBar: c.access == null
+      bottomNavigationBar: c.access == null || hiddenDemo
           ? null
           : Platform.isIOS
           ? CupertinoTabBar(
@@ -589,18 +642,16 @@ class _SessionScreenState extends State<SessionScreen>
       ),
       card([
         TextButton.icon(
-          onPressed: () => setDemoControls(!showDemoControls),
-          icon: const Icon(Icons.movie_outlined),
-          label: Text(
-            showDemoControls ? 'Hide filming tools' : 'Show filming tools',
-          ),
+          onPressed: openPresentationSettings,
+          icon: const Icon(Icons.settings_outlined),
+          label: const Text('Settings'),
         ),
         if (showDemoControls) ...[
           OutlinedButton.icon(
             onPressed: () =>
                 openGuardianCamera(GuardianAr(session: c, demo: true)),
             icon: const Icon(Icons.view_in_ar),
-            label: const Text('Camera walk preview'),
+            label: const Text('Try guardian camera demo'),
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
@@ -821,6 +872,11 @@ class _SessionScreenState extends State<SessionScreen>
                 icon: const Icon(Icons.settings_suggest_outlined),
                 label: const Text('Permissions & background setup'),
               ),
+              TextButton.icon(
+                onPressed: openPresentationSettings,
+                icon: const Icon(Icons.settings_outlined),
+                label: const Text('Settings'),
+              ),
               if (!c.guardian)
                 OutlinedButton(
                   onPressed: () => c.mutate('resolve'),
@@ -986,8 +1042,8 @@ class _SessionScreenState extends State<SessionScreen>
         ),
       if (showDemoControls && s['demoWalk'] != null)
         OutlinedButton(
-          onPressed: showSessionDetails,
-          child: const Text('Walk controls & camera'),
+          onPressed: () => openGuardianCamera(DirectionPreview(session: c)),
+          child: const Text('Open shared walk camera'),
         ),
       if (!c.guardian && phase != 'resolved') ...[
         const SizedBox(height: 12),
@@ -1099,6 +1155,10 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   Future<void> openGuardianCamera(Widget screen) async {
+    final isDemo =
+        (screen is GuardianAr && screen.demo) ||
+        c.snapshot?['sensorMode'] == 'simulated';
+    if (isDemo && !showDemoControls) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     if (Platform.isAndroid && screen is GuardianAr && !screen.demo) {
       final google = await showDialog<bool>(
@@ -1135,12 +1195,18 @@ class _SessionScreenState extends State<SessionScreen>
       if (google == null || !mounted) return;
       screen = GuardianAr(session: c, geospatial: google);
     }
-    if (!mounted) return;
-    await Navigator.of(context)
-        .push<void>(MaterialPageRoute(builder: (_) => screen));
+    if (!mounted || (isDemo && !showDemoControls)) return;
+    final route = MaterialPageRoute<void>(builder: (_) => screen);
+    if (isDemo) demoCameraRoute = route;
+    try {
+      await Navigator.of(context).push<void>(route);
+    } finally {
+      if (identical(demoCameraRoute, route)) demoCameraRoute = null;
+    }
   }
 
   Future<void> startSharedDemo() async {
+    if (!showDemoControls) return;
     try {
       List<Map<String, Object>> route;
       if (kazeDemoRoute.isNotEmpty) {
@@ -1175,7 +1241,7 @@ class _SessionScreenState extends State<SessionScreen>
           {'latitude': p.latitude + .0004, 'longitude': p.longitude + .0004},
         ];
       }
-      if (mounted) await c.createSharedDemo(route);
+      if (mounted && showDemoControls) await c.createSharedDemo(route);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1187,7 +1253,9 @@ class _SessionScreenState extends State<SessionScreen>
 
   Widget sharedDemoControls() {
     final walk = c.snapshot?['demoWalk'] as Map?;
-    if (c.snapshot?['sensorMode'] != 'simulated' || walk == null) {
+    if (!showDemoControls ||
+        c.snapshot?['sensorMode'] != 'simulated' ||
+        walk == null) {
       return const SizedBox();
     }
     return Column(
@@ -1236,6 +1304,11 @@ class _SessionScreenState extends State<SessionScreen>
             ],
           ),
         OutlinedButton.icon(
+          onPressed: () => openGuardianCamera(DirectionPreview(session: c)),
+          icon: const Icon(Icons.camera_alt_outlined),
+          label: const Text('Open shared walk camera'),
+        ),
+        OutlinedButton.icon(
           onPressed: () => openGuardianCamera(GuardianAr(session: c)),
           icon: const Icon(Icons.view_in_ar),
           label: const Text('Track shared trail in camera'),
@@ -1263,6 +1336,12 @@ class _SessionScreenState extends State<SessionScreen>
       listenable: c,
       builder: (context, _) {
         final s = c.snapshot, p = latest;
+        if (hiddenDemo) {
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('No live session to display.'),
+          );
+        }
         if (s == null) {
           return const Padding(
             padding: EdgeInsets.all(24),
@@ -1525,24 +1604,14 @@ class _SessionScreenState extends State<SessionScreen>
           style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(color: colors.onSurfaceVariant),
         ),
-        section('Presentation', [
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Show filming tools'),
-            subtitle: const Text(
-              'Show walk launch and playback controls on the welcome screen, map and session details.',
-            ),
-            value: showDemoControls,
-            onChanged: setDemoControls,
-          ),
-        ]),
+        section('Presentation', [demoModeSwitch()]),
         section('Device setup', [
           if (showDemoControls)
             action(
               Icons.view_in_ar,
-              'Camera walk preview',
+              'Try guardian camera demo',
               () => openGuardianCamera(GuardianAr(session: c, demo: true)),
-              subtitle: 'A camera-guided walking trail.',
+              subtitle: 'Practice with a virtual walker. No wearer, GPS or missed check-in is required.',
             ),
           action(
             Icons.settings_suggest_outlined,
@@ -1562,7 +1631,7 @@ class _SessionScreenState extends State<SessionScreen>
               subtitle: 'Experimental relative diagram and tuning logs. Indoor tracking is not working.',
             ),
         ]),
-        if (s['sensorMode'] == 'simulated')
+        if (showDemoControls && s['sensorMode'] == 'simulated')
           section('Shared walk', [sharedDemoControls()]),
         if (c.guardian && phase != 'resolved')
           section('Guardian alerts', [guardianMonitoring()]),

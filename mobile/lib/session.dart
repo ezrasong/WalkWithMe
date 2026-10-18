@@ -178,6 +178,7 @@ class SessionController extends ChangeNotifier {
   Map<String, dynamic> device = {};
   String message = '', connection = 'Connecting to the PC…';
   bool busy = false, polling = false, visible = true, disposed = false;
+  bool demoMode = false;
   Timer? timer;
   int revision = 0;
   DateTime? received;
@@ -212,6 +213,16 @@ class SessionController extends ChangeNotifier {
       );
       if (current != access || startedRevision != revision || disposed) return;
       device = status;
+      if (!demoMode &&
+          snapshot?['sensorMode'] == 'simulated' &&
+          status['enabled'] == true) {
+        await _stopGuardianMonitoring();
+        if (current != access || startedRevision != revision || disposed) {
+          return;
+        }
+        device = {'enabled': false};
+        return;
+      }
       if (iosGuardian && status['enabled'] == true && snapshot != null) {
         await native.invokeMethod('updateGuardian', _guardianConfiguration);
       }
@@ -230,6 +241,11 @@ class SessionController extends ChangeNotifier {
       );
     }
     if (enabled) {
+      if (!demoMode && snapshot?['sensorMode'] == 'simulated') {
+        throw const FormatException(
+          'Enable demo mode before enabling simulated guardian alerts.',
+        );
+      }
       if (snapshot == null ||
           !['armed', 'challenge', 'alert'].contains(snapshot!['phase'])) {
         throw const FormatException(
@@ -354,6 +370,11 @@ class SessionController extends ChangeNotifier {
 
   Future<void> restore() async {
     try {
+      demoMode = await storage.read(key: 'showDemoControls') == 'true';
+    } catch (_) {
+      demoMode = false;
+    }
+    try {
       final raw = await storage.read(key: 'session');
       if (raw != null) access = SessionAccess.fromJson(jsonDecode(raw));
     } catch (_) {
@@ -374,6 +395,7 @@ class SessionController extends ChangeNotifier {
         message = 'Could not confirm background guardian monitoring. Review Settings.';
       }
     }
+    changed();
     startPolling();
   }
 
@@ -738,6 +760,26 @@ class SessionController extends ChangeNotifier {
 
   void changed() {
     if (!disposed) notifyListeners();
+  }
+
+  Future<void> setDemoMode(bool enabled) async {
+    demoMode = enabled;
+    changed();
+    // Local presentation state must not end a session or change a deadline.
+    try {
+      await storage.write(key: 'showDemoControls', value: enabled.toString());
+    } catch (_) {
+      message = 'Could not save the demo mode preference on this phone.';
+    }
+    if (!demoMode && guardian && snapshot?['sensorMode'] == 'simulated') {
+      try {
+        await _stopGuardianMonitoring();
+        await _refreshGuardianStatus();
+      } catch (_) {
+        message = 'Could not stop simulated guardian notifications. Review notification settings.';
+      }
+    }
+    changed();
   }
 
   @override

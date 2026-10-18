@@ -535,7 +535,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
       : Scaffold(
           appBar: AppBar(
             title: Text(
-              widget.demo ? 'WalkWithMe camera preview' : 'Outdoor spatial AR',
+              widget.demo ? 'Guardian camera demo' : 'Outdoor spatial AR',
             ),
           ),
           body: SafeArea(
@@ -548,7 +548,7 @@ class _GuardianArState extends State<GuardianAr> with WidgetsBindingObserver {
                         padding: EdgeInsets.all(12),
                         child: Text(
                           widget.demo
-                              ? 'Follow the walker along the pink camera trail. Point toward a well-lit open space, then start.'
+                              ? 'Practice with a virtual walker and generated pink trail. No real wearer is tracked. Point toward a well-lit open space, then start.'
                               : 'Outdoor use only. Indoor tracking and indoor AR navigation are not working. Align using accurate outdoor locations and the instructed registration walk. Missing heights use a floating horizontal guide. Ground, walls, stairs and obstacles are not detected. Camera processing stays on this phone.',
                         ),
                       ),

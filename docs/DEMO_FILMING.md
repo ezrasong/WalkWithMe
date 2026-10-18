@@ -1,6 +1,6 @@
 # KAZE outdoor filming demo
 
-This scenario uses a labelled virtual wearer and generated positions. An actor can walk the same route for the video; the actor's sensors do not drive this mode. The PC serves the same simulated trail to the map and guardian camera. No emergency service is contacted.
+This scenario uses a virtual wearer and generated positions. An actor can walk the same route for the video; the actor's sensors do not drive this mode. The PC serves the same simulated trail to the map and guardian camera. Describe the generated trail as simulated in the video. No emergency service is contacted.
 
 ## Update the iPhone guardian
 
@@ -19,14 +19,22 @@ Replace `YOUR_IPHONE_DEVICE_ID` with the connected iPhone ID from `flutter devic
 
 The default backend address is compiled from `mobile/lib/backend.dart`; both phones must use the same reachable service. If necessary add `--dart-define=KAZE_BASE_URL=https://your-service.example` to the release command. The PC and HTTPS tunnel must remain running. Pulling the repository alone does not update an already installed iPhone app. Windows cannot perform or verify the signed iPhone build.
 
-## Hide presentation controls
+## Enable or disable demo mode
 
-On each phone open **Settings → Presentation → Show demo tools** and turn it off. This hides demo launch/playback shortcuts from the welcome screen, map and session details and remembers the preference on that phone. Filming controls remain in **Settings → Shared walking demo**, so the owner can start another take. Generated positions still display DEMO labels. On the welcome screen, **Show demo tools** reveals the launcher again.
+On the welcome screen, tap **Settings**, enable **Demo mode**, then tap **Done**. During a session, the same switch is under **Settings → Presentation → Demo mode**. It defaults off on a new installation; an explicitly saved choice is remembered.
+
+Turning it off hides all demo launch/playback controls, closes an open demo camera, hides the simulated session's map, activity, pairing and session tools, and stops that phone's simulated guardian notifications. The generic Settings entry remains available to enable it again. The server session, pairing and deadlines are not changed; re-enabling reveals the same session if it is still available. **Return to setup** on the hidden-session screen removes only this phone's saved access. Live sessions and their guardian notifications remain available with demo mode off. Limitation notices remain visible.
+
+To film a shared simulated walk, keep demo mode enabled on both phones. Turning it off also hides the generated trail, rather than presenting generated positions as live tracking.
+
+## Practice on the guardian phone alone
+
+Enable demo mode, then choose **Try guardian camera demo** from the welcome screen or **Settings → Device setup** during a guardian session. Allow camera access, point toward a well-lit open space and press **Start walk**. Pause/resume, restart and 1x/2x speed controls operate a virtual walker. This needs no wearer phone, missed check-in, backend route, GPS or outdoor registration walk. It does not change your existing guardian session. On devices without native AR, the camera animation does not track real phone movement or locate a person. Return from the camera and disable demo mode in Settings to hide it.
 
 ## Prepare one take
 
-1. Use the Android phone as demo owner and the iPhone as guardian. With no active wearer recording, choose **Start shared walking demo** on the Android phone. The local private build preset chooses the route; no address or private coordinates belong in source control.
-2. Open **Demo walk controls & camera** and pause the initial walk while preparing. In Settings show the guardian QR/code; join on the iPhone. Keep KAZE open on the guardian for live alert status. This demo enables live sharing, so setup evidence is visible before the missed check-in.
+1. Enable demo mode on both phones. Use the Android phone as demo owner and the iPhone as guardian. With no active wearer recording, choose **Start shared walk** on the Android phone. The local private build preset chooses the route; no address or private coordinates belong in source control.
+2. Pause the initial walk under **Settings → Shared walk** while preparing. In Settings show the guardian QR/code; join on the iPhone. The guardian can select **Open shared walk camera** on the map before an alert; this opens approximate outdoor GPS/compass placement without the spatial AR registration walk. Keep KAZE open for live alert status. This demo enables live sharing, so setup evidence is visible before the missed check-in.
 3. Check the map and intended walking area in person. The preset is a presentation route; it does not establish a passable sidewalk, crossing, entrance or destination. Use a short visible section with the actor and guardian on foot.
 4. For the recorded take, the owner presses **Start 40-second alert take**. The virtual wearer restarts from the route's beginning at 1x. The actor can start walking along that route at approximately 1.2 m/s.
 5. At 30 seconds KAZE requests a check-in. Leave it unanswered. At 40 seconds the server enters the alert phase and automatically pauses virtual movement, normally 48 m along the route (or at its end if shorter). The final point stays current while paused. The guardian opens the camera and approaches that recorded demo position. Acknowledgment is optional and does not end the scenario.
@@ -40,7 +48,7 @@ Normal **Pause walk**, **Resume walk**, speed and **Restart walk** controls chan
 
 **Outdoor direction preview (approximate)**, available in the alerted guardian's session details when a recorded point exists, uses GPS and compass. It opens without the spatial registration walk, and labels its approximate placement. It shows a direction cue and map; it does not guarantee a ground-anchored trail. Camera permission, precise location and compass observations are still required.
 
-The standalone **Local camera animation** is a separate presentation mode. It does not demonstrate the shared missed check-in flow. Keep DEMO and approximation labels visible in the video. iPhone remote push is not configured for the free-only setup; an open app receives current server status. Use iOS Screen Recording or a separate camera for the video; KAZE does not record the camera footage itself.
+The standalone **Try guardian camera demo** is a separate presentation mode. It does not demonstrate the shared missed check-in flow. Explain simulation and approximation in the video. iPhone remote push is not configured for the free-only setup; an open app receives current server status. Use iOS Screen Recording or a separate camera for the video; KAZE does not record the camera footage itself.
 
 ## Test real pocket motion inside the house
 

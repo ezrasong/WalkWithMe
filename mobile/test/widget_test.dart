@@ -9,6 +9,8 @@ import 'package:http/testing.dart';
 import 'package:kaze/main.dart';
 import 'package:kaze/session.dart';
 import 'package:kaze/backend.dart';
+import 'package:kaze/guardian_ar.dart';
+import 'package:kaze/direction_preview.dart';
 
 const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const token = 'guardian_012345678901234567890123456789012345';
@@ -259,31 +261,40 @@ void main() {
     },
   );
   testWidgets(
-    'demo launch controls can be hidden and the preference survives reopening',
+    'demo mode defaults off and its settings choice survives reopening',
     (tester) async {
       FlutterSecureStorage.setMockInitialValues({'deviceSetupSeenV1': 'true'});
       await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Hide filming tools'));
+      expect(find.text('Start shared walk'), findsNothing);
+      expect(find.text('Try guardian camera demo'), findsNothing);
+      await tester.ensureVisible(find.text('Settings'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Hide filming tools'));
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo mode'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(find.text('Try guardian camera demo'), findsOneWidget);
+      expect(
+        await const FlutterSecureStorage().read(key: 'showDemoControls'),
+        'true',
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
+      await tester.pumpAndSettle();
+      expect(find.text('Start shared walk'), findsOneWidget);
+      await tester.ensureVisible(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Demo mode'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
       expect(find.text('Start shared walk'), findsNothing);
-      expect(find.text('Camera walk preview'), findsNothing);
-      await tester.scrollUntilVisible(
-        find.textContaining('Indoor tracking is not working'),
-        -150,
-        scrollable: find
-            .descendant(
-              of: find.byType(ListView).first,
-              matching: find.byType(Scrollable),
-            )
-            .first,
-      );
-      expect(
-        find.textContaining('Indoor tracking is not working'),
-        findsOneWidget,
-      );
+      expect(find.text('Try guardian camera demo'), findsNothing);
       expect(
         await const FlutterSecureStorage().read(key: 'showDemoControls'),
         'false',
@@ -291,17 +302,164 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
       await tester.pumpAndSettle();
-      expect(find.text('Show filming tools'), findsOneWidget);
       expect(find.text('Start shared walk'), findsNothing);
-      await tester.ensureVisible(find.text('Show filming tools'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Show filming tools'));
-      await tester.pumpAndSettle();
-      expect(find.text('Start shared walk'), findsOneWidget);
       expect(
-        await const FlutterSecureStorage().read(key: 'showDemoControls'),
-        'true',
+        find.textContaining('Indoor tracking is not working'),
+        findsOneWidget,
       );
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  Map<String, dynamic> sessionSnapshot({bool simulated = false}) => {
+    'id': id,
+    'name': simulated ? 'Simulated walker' : 'Real wearer',
+    'sensorMode': simulated ? 'simulated' : 'device',
+    'phase': 'armed',
+    'shared': true,
+    'serverNow': DateTime.now().millisecondsSinceEpoch,
+    'dueAt': DateTime.now().millisecondsSinceEpoch + 60000,
+    'expiresAt': DateTime.now().millisecondsSinceEpoch + 3600000,
+    'intervalSeconds': 120,
+    'graceSeconds': 30,
+    'geography': {'latest': null, 'paths': []},
+    if (simulated)
+      'demoWalk': {'distance': 10, 'total': 50, 'running': false, 'speed': 1},
+  };
+
+  test('demo off stops simulated guardian alerts without ending or changing its session', () async {
+    var monitoring = false;
+    var starts = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SessionController.native, (call) async {
+          if (call.method == 'startGuardian') {
+            monitoring = true;
+            starts++;
+          }
+          if (call.method == 'stopGuardian') monitoring = false;
+          return call.method == 'guardianStatus'
+              ? {'enabled': monitoring}
+              : null;
+        });
+    final c = SessionController();
+    addTearDown(c.dispose);
+    c.access = guardian();
+    final data = sessionSnapshot(simulated: true);
+    c.snapshot = data;
+    await c.setDemoMode(true);
+    await c.setGuardianMonitoring(true);
+    expect(monitoring, isTrue);
+    await c.setDemoMode(false);
+    expect(monitoring, isFalse);
+    expect(c.snapshot, same(data));
+    expect(c.access?.role, 'guardian');
+    await c.setGuardianMonitoring(true);
+    expect(starts, 1);
+    expect(c.message, contains('Enable demo mode'));
+  });
+
+  test('demo off preserves live guardian alerts and access', () async {
+    var stops = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SessionController.native, (call) async {
+          if (call.method == 'stopGuardian') stops++;
+          return call.method == 'guardianStatus' ? {'enabled': true} : null;
+        });
+    final c = SessionController();
+    addTearDown(c.dispose);
+    c.access = guardian();
+    final data = sessionSnapshot();
+    c.snapshot = data;
+    await c.setDemoMode(true);
+    await c.setGuardianMonitoring(true);
+    await c.setDemoMode(false);
+    expect(stops, 0);
+    expect(c.snapshot, same(data));
+    expect(c.device['enabled'], isTrue);
+    expect(c.access?.role, 'guardian');
+  });
+
+  testWidgets(
+    'guardian can open standalone demo without changing live access, and disabling closes it',
+    (tester) async {
+      FlutterSecureStorage.setMockInitialValues({
+        'deviceSetupSeenV1': 'true',
+        'showDemoControls': 'true',
+      });
+      final calls = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SessionController.native, (call) async {
+            calls.add(call.method);
+            if (call.method == 'prepareGuardianAr') {
+              expect(call.arguments, {'demo': true});
+              return 'Camera permission denied. Use the map.';
+            }
+            return call.method == 'guardianStatus' ? {'enabled': false} : null;
+          });
+      await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
+      await tester.pumpAndSettle();
+      final dynamic screen = tester.state(find.byType(SessionScreen));
+      final c = screen.c as SessionController;
+      c.timer?.cancel();
+      final access = guardian();
+      c.access = access;
+      c.snapshot = sessionSnapshot();
+      c.received = DateTime.now();
+      screen.tab = 2;
+      c.changed();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Try guardian camera demo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Try guardian camera demo'));
+      await tester.pumpAndSettle();
+      expect(find.byType(GuardianAr), findsOneWidget);
+      expect(calls, contains('prepareGuardianAr'));
+      expect(c.access, same(access));
+      expect(c.snapshot?['phase'], 'armed');
+      screen.setDemoControls(false);
+      await tester.pumpAndSettle();
+      expect(find.byType(GuardianAr), findsNothing);
+      expect(find.text('Try guardian camera demo'), findsNothing);
+      expect(c.access, same(access));
+      expect(c.snapshot?['sensorMode'], 'device');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'shared guardian camera is available before alert and demo off hides its data and controls',
+    (tester) async {
+      FlutterSecureStorage.setMockInitialValues({
+        'deviceSetupSeenV1': 'true',
+        'showDemoControls': 'true',
+      });
+      await tester.pumpWidget(const MaterialApp(home: SessionScreen()));
+      await tester.pumpAndSettle();
+      final dynamic screen = tester.state(find.byType(SessionScreen));
+      final c = screen.c as SessionController;
+      c.timer?.cancel();
+      c.access = guardian();
+      c.snapshot = sessionSnapshot(simulated: true);
+      c.received = DateTime.now();
+      c.changed();
+      await tester.pumpAndSettle();
+      expect(find.text('Open shared walk camera'), findsOneWidget);
+      await tester.tap(find.text('Open shared walk camera'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DirectionPreview), findsOneWidget);
+      screen.setDemoControls(false);
+      await tester.pumpAndSettle();
+      expect(find.byType(DirectionPreview), findsNothing);
+      expect(find.text('No live session to display.'), findsOneWidget);
+      expect(find.byType(TrailMap), findsNothing);
+      expect(find.text('Open shared walk camera'), findsNothing);
+      expect(find.text('Start 40-second alert take'), findsNothing);
+      expect(find.text('Track shared trail in camera'), findsNothing);
+      expect(find.byType(NavigationBar), findsNothing);
+      expect(c.snapshot?['sensorMode'], 'simulated');
+      screen.setDemoControls(true);
+      await tester.pumpAndSettle();
+      expect(find.text('Open shared walk camera'), findsOneWidget);
+      expect(find.text('Start 40-second alert take'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     },
   );
