@@ -10,11 +10,14 @@ On the Mac, from the existing repository checkout on `main`:
 git pull --ff-only origin main
 cd mobile
 flutter pub get
-flutter build ios --debug --no-codesign
 open ios/Runner.xcworkspace
+flutter devices
+flutter run --release -d YOUR_IPHONE_DEVICE_ID
 ```
 
-In Xcode select Runner, the connected iPhone and your Apple Account's Personal Team under Signing & Capabilities, then Run. Keep `KAZE_PUSH_ENABLED=NO`. A free Apple Account is sufficient for this development install. The default backend address is compiled from `mobile/lib/backend.dart`; both phones must use the same reachable service. The PC and HTTPS tunnel must remain running. Pulling the repository alone does not update an already installed iPhone app. Windows cannot perform the signed iPhone build.
+Replace `YOUR_IPHONE_DEVICE_ID` with the connected iPhone ID from `flutter devices`. Configure Runner's automatic signing and your Apple Account's Personal Team in Xcode before the first install, then rerun the release command. Keep `KAZE_PUSH_ENABLED=NO`. A free Apple Account is sufficient for local testing, with a limited provisioning lifetime. Release mode allows launching from the app icon. Debug mode requires launching through Flutter/Xcode with the development tooling attached. `--no-codesign` works with `flutter build ios`, not `flutter run`, and cannot install an unsigned app on the phone.
+
+The default backend address is compiled from `mobile/lib/backend.dart`; both phones must use the same reachable service. If necessary add `--dart-define=KAZE_BASE_URL=https://your-service.example` to the release command. The PC and HTTPS tunnel must remain running. Pulling the repository alone does not update an already installed iPhone app. Windows cannot perform or verify the signed iPhone build.
 
 ## Hide presentation controls
 
@@ -40,6 +43,8 @@ Normal **Pause walk**, **Resume walk**, speed and **Restart walk** controls chan
 The standalone **Local camera animation** is a separate presentation mode. It does not demonstrate the shared missed check-in flow. Keep DEMO and approximation labels visible in the video. iPhone remote push is not configured for the free-only setup; an open app receives current server status. Use iOS Screen Recording or a separate camera for the video; KAZE does not record the camera footage itself.
 
 ## Test real pocket motion inside the house
+
+This tests sensor transport and a relative movement estimate. It cannot validate indoor floor alignment, room recognition or navigation. No advance mapping or calibration is required; an optional measured route is only a reference for evaluating accuracy. Diagnostics support manual analysis and do not automatically fine-tune the model.
 
 1. On the Vivo, end the simulated session under **Settings → End session and stop sharing**, then **Return to setup**. On the iPhone remove the old guardian access before joining the new session.
 2. On the Vivo start a normal wearer session with **2 minutes** between check-ins and **30 seconds** to respond. Accept the motion/retention consent. For immediate viewing during this test, explicitly enable **Also share my location throughout this session**. No doorway or calibration walk is required. Open KAZE on the paired watch if using it; the updated watch companion is needed for timed native step provenance.

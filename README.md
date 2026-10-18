@@ -4,6 +4,18 @@ A phone and watch app for timed safety check-ins. A trusted guardian can view th
 
 Built with Flutter for Android and iOS, plus a native Wear OS companion. Tested on a **Vivo X300 Ultra** and **Galaxy Watch4**.
 
+## Current capabilities
+
+| Feature | Current behavior and limits |
+| --- | --- |
+| Safety sessions | Server-confirmed phone/watch check-ins, grace periods, guardian pairing, optional live sharing, revocation and expiry. No emergency dispatch or medical detection. |
+| Pocket motion | Experimental relative movement from Android sensors, with optional watch activity checks. Recording starts anywhere without a manual calibration walk. Room, floor, geographic origin and north remain unknown; walking accuracy is unverified. |
+| Indoor camera | **Pocket motion camera preview** shows a local camera and a separate relative diagram. It cannot align a trail to the floor or navigate between rooms. |
+| Outdoor camera | Experimental ARKit/ARCore alignment needs accurate outdoor positions and a 30–100 m registration walk. Optional Android Geospatial and approximate GPS/compass preview have separate requirements. Physical accuracy remains unverified. |
+| Filming demo | A labelled simulated wearer follows a shared server-generated route. A repeatable 40-second alert take and hideable presentation controls support filming; DEMO labels stay visible. |
+
+A freely pocketed phone does not see the rooms it passes through. Its inertial sensors can estimate relative movement, but cannot identify an arbitrary starting room or match that movement to a second phone's camera. Walking around alone does not create a visual indoor map in this build. No advance mapping is needed for relative recording; universal pocket-only indoor AR localization is not implemented.
+
 ## Run
 
 Requires Node.js 22.13 or newer.
@@ -39,4 +51,8 @@ iPhone guardians can opt into local review reminders using a free Apple Account 
 
 Experimental [guardian spatial AR](docs/AR_BACKEND.md) uses native ARKit/RealityKit or ARCore and a measured outdoor walking baseline to align a recorded trail with the camera. It draws continuous trail sections with live direction and distance cues; unknown heights use a labeled floating horizontal guide. Poor registration and excessive horizontal uncertainty require the map. Ground, floors and obstacles are not detected. Physical accuracy and two-phone operation still need verification. The separate compass preview remains unregistered.
 
-[Motion trail evaluation](docs/MOTION_EVALUATION.md) starts automatically with wearer sessions and sends compressed batches over Wi-Fi or cellular. It saves no raw capture by default; optional private captures support measured comparisons. It does not change shared trails or check-in behavior.
+[Motion trail evaluation](docs/MOTION_EVALUATION.md) starts automatically with wearer sessions and sends compressed batches over Wi-Fi or cellular. With explicit retention consent, continuous supported batches form a shared relative research diagram under the session's guardian access rules. Gaps and recorder restarts start separate sections with unknown origins. This never becomes geographic evidence or changes check-in behavior. Automatic streaming saves no raw capture; optional private captures support measured comparisons.
+
+Owner-only tuning diagnostics retain at most 120 batch summaries with consent. Copy them from **Settings → Motion trail evaluation → Copy motion diagnostics** before ending a house test. They report sampling, gaps, model timing, stationary decisions and watch checks, excluding raw samples, coordinates and credentials. They do not train the model or prove accuracy. Relative history is bounded to 4096 points/128 sections; consent withdrawal, expiry and deletion clear the relevant retained records. The motion checkpoint is subject to separate non-commercial research terms; see the motion guide for provenance and licensing.
+
+See [filming and indoor test instructions](docs/DEMO_FILMING.md), [iPhone build instructions](docs/FLUTTER_MOBILE.md#iphone) and the [Devpost project story](docs/DEVPOST.md).

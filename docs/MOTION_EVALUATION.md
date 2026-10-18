@@ -4,6 +4,12 @@ KAZE automatically streams compressed motion batches from active wearer Android 
 
 ## Local setup
 
+### Recording and evaluation references
+
+Recording can start anywhere with the phone freely pocketed, without advance mapping or manual calibration. Independently measured waypoints below are an evaluation reference for checking error, not a required setup procedure. They do not make the app recognize a room or register an indoor camera. The wearer camera is not used, so walking alone does not build a visual map. Pocket-only inertial motion cannot supply the missing shared indoor reference; the current preview remains a relative diagram with unknown room, floor, origin and north.
+
+### Install the research runtime
+
 Requires Python 3.11 or newer and a development Android build with ADB access. From the repository root:
 
 ```powershell
@@ -101,7 +107,7 @@ Before continuous stitching was added, a later physical run verified automatic s
 
 The continuous build was installed over the existing Vivo app with its data preserved. A separate stationary transport session sent three compressed batches (226,933 payload bytes total) from real phone sensors to the PC. Its shared derived preview contained one continuous section with 147 retained points through monotonic second 30, a zero stationary endpoint, unknown room/floor/yaw and `guidanceAllowed: false`. Its check-in deadline was unchanged, and its private raw-capture directory stayed empty. The dedicated test was resolved and deleted, and the prior native preferences/session selection were restored. This verifies real transport and stitching, not pocket walking accuracy, heading robustness, watch-device fusion or indoor localization. No measured walking-route comparison has been completed for this update.
 
-Validation for this update: 72 backend tests, 11 Python motion tests, 103 Flutter tests, Flutter analysis, Android shared unit tests, Android build and lint. Backend tests include actual checkpoint output reaching authorized HTTP snapshots, consent withdrawal during inference, gap/replay handling and SQLite continuation after reopening. Synthetic posture transforms and stationary fixtures prove implementation behavior only. iOS compilation/device testing and successful physical Google Geospatial localization remain unverified.
+Most recent application validation: 76 backend tests, 11 Python motion tests, 105 Flutter tests, Flutter analysis and an Android build. Earlier continuous-motion checks also passed Android shared unit tests and lint. Backend tests include actual checkpoint output reaching authorized HTTP snapshots, consent withdrawal during inference, gap/replay handling and SQLite continuation after reopening. Synthetic posture transforms and stationary fixtures prove implementation behavior only. iOS compilation/device testing and successful physical Google Geospatial localization remain unverified.
 
 Upstream: [RoNIN source](https://github.com/Sachini/ronin), pinned commit `805b7f0f28bb164ce89ada9ac05a9470dbe3d715`; [published checkpoint archive and terms](https://doi.org/10.20383/102.0543). The code is GPL-3.0; the pretrained checkpoint has separate **non-commercial research/education/artistic-use terms**. The runtime retains both licenses. This setup is for non-commercial research evaluation, including the development backend, not a grant to ship the checkpoint in a commercial product or service. See the publisher's full terms before other use.
 
