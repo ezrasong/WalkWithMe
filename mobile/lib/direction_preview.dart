@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,10 @@ import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'session.dart';
+import 'camera_geography.dart';
+import 'camera_trail_overlay.dart';
+import 'camera_navigation.dart';
+import 'spatial_registration.dart';
 
 // A fallback outdoor compass cue. No shared spatial anchor or geometry is assumed.
 class DirectionPreview extends StatefulWidget {
@@ -22,22 +27,37 @@ class _DirectionPreviewState extends State<DirectionPreview>
   StreamSubscription<CompassEvent>? compass;
   Position? position;
   double? heading;
+  double? trueNorthOffset = Platform.isAndroid ? null : 0;
+  bool declinationPending = false;
+  CameraTrailGuidance progress = CameraTrailGuidance();
+  Object? demoRun;
   DateTime? headingAt;
   Timer? timer;
+  late final SessionAccess? openingAccess;
   bool closed = false;
   String status = 'Waiting for camera, location and compass permission…';
   bool get authorized =>
       widget.session.visible &&
-      widget.session.guardian &&
-      widget.session.snapshot?['phase'] == 'alert' &&
-      widget.session.snapshot?['shared'] == true;
+      identical(widget.session.access, openingAccess) &&
+      (widget.session.guardian || sharedDemo) &&
+      (widget.session.snapshot?['phase'] == 'alert' || sharedDemo) &&
+      widget.session.snapshot?['shared'] == true &&
+      (widget.session.snapshot?['expiresAt'] == null ||
+          widget.session.serverNow <
+              (widget.session.snapshot!['expiresAt'] as num));
+  bool get sharedDemo =>
+      widget.session.snapshot?['sensorMode'] == 'simulated' &&
+      widget.session.snapshot?['demoWalk'] != null &&
+      widget.session.snapshot?['phase'] != 'resolved';
   @override
   void initState() {
     super.initState();
+    openingAccess = widget.session.access;
     WidgetsBinding.instance.addObserver(this);
     widget.session.addListener(sessionChanged);
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
+      sessionChanged();
     });
     start();
   }
@@ -88,15 +108,57 @@ class _DirectionPreviewState extends State<DirectionPreview>
         await c.dispose();
         return;
       }
+      c.addListener(() {
+        if (!closed && c.value.hasError) {
+          scheduleMicrotask(() {
+            if (!closed) {
+              stop();
+              if (mounted) {
+                setState(
+                  () => status = 'Camera unavailable. Return to the map.',
+                );
+              }
+            }
+          });
+        }
+      });
       positions =
           Geolocator.getPositionStream(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.best,
-              distanceFilter: 0,
-            ),
+            locationSettings: Platform.isAndroid
+                ? AndroidSettings(
+                    accuracy: LocationAccuracy.bestForNavigation,
+                    distanceFilter: 0,
+                    intervalDuration: const Duration(seconds: 1),
+                  )
+                : AppleSettings(
+                    accuracy: LocationAccuracy.bestForNavigation,
+                    distanceFilter: 0,
+                    pauseLocationUpdatesAutomatically: false,
+                  ),
           ).listen(
             (p) {
               if (mounted) setState(() => position = p);
+              if (Platform.isAndroid &&
+                  trueNorthOffset == null &&
+                  !declinationPending &&
+                  !p.isMocked) {
+                declinationPending = true;
+                SessionController.native
+                    .invokeMethod<num>('magneticDeclination', {
+                      'latitude': p.latitude,
+                      'longitude': p.longitude,
+                    })
+                    .then((value) {
+                      if (!closed &&
+                          mounted &&
+                          value != null &&
+                          value.isFinite) {
+                        setState(() => trueNorthOffset = value.toDouble());
+                      }
+                    })
+                    .catchError((Object _) {})
+                    .whenComplete(() => declinationPending = false);
+              }
             },
             onError: (_) {
               if (mounted) {
@@ -111,7 +173,10 @@ class _DirectionPreviewState extends State<DirectionPreview>
         (e) {
           if (mounted) {
             setState(() {
-              heading = directionHeading(e);
+              final raw = directionHeading(e, camera: true);
+              heading = raw == null || trueNorthOffset == null
+                  ? null
+                  : (raw + trueNorthOffset! + 360) % 360;
               headingAt = DateTime.now();
             });
           }
@@ -138,7 +203,7 @@ class _DirectionPreviewState extends State<DirectionPreview>
     compass = null;
     final c = camera;
     camera = null;
-    c?.dispose();
+    c?.dispose().catchError((Object _) {});
   }
 
   @override
@@ -166,56 +231,109 @@ class _DirectionPreviewState extends State<DirectionPreview>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Camera direction preview')),
-    body: SafeArea(
-      child: Column(
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              'Experimental outdoor compass cue. No anchored breadcrumbs, floor, stair or obstacle guidance. Camera stays on this phone; no recording or upload.',
-            ),
-          ),
-          Expanded(
-            child: camera?.value.isInitialized == true
-                ? CameraPreview(camera!)
-                : Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(status),
+  Widget build(BuildContext context) {
+    final nextRun = widget.session.snapshot?['demoWalk']?['runId'];
+    if (nextRun != demoRun) {
+      demoRun = nextRun;
+      progress = CameraTrailGuidance();
+    }
+    final guide = geographicCameraGuide(
+      snapshot: widget.session.snapshot ?? {},
+      authorized: authorized && !closed,
+      position: position,
+      heading: heading,
+      headingAt: headingAt,
+      now: DateTime.now(),
+      serverNow: widget.session.serverNow,
+      progress: progress,
+    );
+    if (camera?.value.isInitialized == true && !closed) {
+      return CameraNavigation(
+        camera: CameraPreview(
+          camera!,
+          child: guide == null || guide.nearby
+              ? null
+              : IgnorePointer(
+                  child: CustomPaint(
+                    painter: CameraTrailOverlay(
+                      guide.points,
+                      color: sharedDemo
+                          ? Colors.pinkAccent
+                          : Theme.of(context).colorScheme.primary,
                     ),
                   ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Semantics(
-              liveRegion: true,
+                ),
+        ),
+        snapshot: widget.session.snapshot ?? {},
+        guardianLocation: position == null || position!.isMocked
+            ? null
+            : {
+                'latitude': position!.latitude,
+                'longitude': position!.longitude,
+              },
+        turn: guide?.turn,
+        distance: guide?.distance,
+        nearby: guide?.nearby ?? false,
+        street: guide?.street,
+        simulated: sharedDemo,
+        mode: 'Approximate GPS + compass',
+        details: guide == null
+            ? 'Waiting for fresh precise locations and compass. Move outdoors, hold the phone upright and calibrate the compass. Guidance stays hidden until readings are usable.'
+            : 'Next recorded point. Location uncertainty allowance ${guide.uncertainty.round()} m. No ground or obstacle detection; arrival is not verified.',
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text('Guardian camera guide')),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
               child: Text(
-                directionCue(
-                  authorized: authorized,
-                  target:
-                      widget.session.snapshot?['geography']?['latest'] as Map?,
-                  position: position,
-                  heading: heading,
-                  headingAt: headingAt,
-                  now: DateTime.now(),
-                  serverNow: widget.session.serverNow,
+                'GPS + compass camera guide. Trail placement and height are approximate, not anchored to the room or ground. Keep the phone upright. Check the map and real surroundings; obstacles and floors are not detected.',
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(status),
                 ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Return to map'),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  guide != null
+                      ? '${sharedDemo ? 'DEMO. ' : ''}${guide.nearby ? 'Within combined location uncertainty; search nearby, arrival is not verified.' : 'Approximate direction to the last shared point. Turn the camera toward the arrow.'} About ${guide.distance.round()} m, horizontal uncertainty allowance ${guide.uncertainty.round()} m.'
+                      : directionCue(
+                          authorized: authorized,
+                          target:
+                              widget.session.snapshot?['geography']?['latest']
+                                  as Map?,
+                          position: position,
+                          heading: heading,
+                          headingAt: headingAt,
+                          now: DateTime.now(),
+                          serverNow: widget.session.serverNow,
+                        ),
+                ),
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Return to map'),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 String directionCue({
@@ -262,9 +380,13 @@ String directionCue({
       : 'turn left'} · ${distance.round()} m to last recorded point. Compass alignment is unvalidated.';
 }
 
-double? directionHeading(CompassEvent event) {
+double? directionHeading(CompassEvent event, {bool camera = false}) {
   final accuracy = event.accuracy;
-  final heading = event.heading;
+  // Android's plugin sends a placeholder zero for headingForCameraMode; its
+  // primary heading already remaps the rotation for upright camera use.
+  final heading = camera && !Platform.isAndroid
+      ? event.headingForCameraMode ?? event.heading
+      : event.heading;
   // The plugin maps unknown accuracy to null; Android's low precision
   // category is 45 degrees. Neither supports a useful turn indication.
   if (accuracy == null ||

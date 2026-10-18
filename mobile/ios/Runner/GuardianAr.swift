@@ -10,6 +10,7 @@ final class GuardianArPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate
   private let location = CLLocationManager()
   private var pending: FlutterResult?
   private var waitingLocation = false
+  private var demoPermission = false
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let plugin = GuardianArPlugin()
@@ -21,9 +22,12 @@ final class GuardianArPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard call.method == "prepareGuardianAr" else { GuardianNotifications.shared.handle(call, result: result); return }
-    guard ARWorldTrackingConfiguration.isSupported else { result("ARKit world tracking unsupported. Use the map."); return }
+    guard ARWorldTrackingConfiguration.isSupported else {
+      result((call.arguments as? [String: Any])?["demo"] as? Bool == true ? "demo-camera" : "camera-guide"); return
+    }
     guard pending == nil else { result("Permission request pending."); return }
     pending = result
+    demoPermission = (call.arguments as? [String: Any])?["demo"] as? Bool == true
     switch AVCaptureDevice.authorizationStatus(for: .video) {
     case .authorized: authorizeLocation()
     case .notDetermined:
@@ -37,6 +41,7 @@ final class GuardianArPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate
   }
 
   private func authorizeLocation() {
+    if demoPermission { finish("ready"); return }
     switch location.authorizationStatus {
     case .authorizedWhenInUse, .authorizedAlways:
       finish(location.accuracyAuthorization == .fullAccuracy ? "ready" : "Precise location required. Use the map.")
@@ -49,7 +54,7 @@ final class GuardianArPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate
     if waitingLocation && pending != nil && manager.authorizationStatus != .notDetermined { authorizeLocation() }
   }
 
-  private func finish(_ value: String) { let result = pending; pending = nil; waitingLocation = false; result?(value) }
+  private func finish(_ value: String) { let result = pending; pending = nil; waitingLocation = false; demoPermission = false; result?(value) }
 }
 
 final class GuardianArFactory: NSObject, FlutterPlatformViewFactory {
@@ -72,6 +77,7 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
   private var started = false
   private var stopped = false
   private var tracked = false
+  private var demo = false
   private let dots = AnchorEntity(world: SIMD3<Float>.zero)
   private var backgroundObserver: NSObjectProtocol?
   private var watchdog: Timer?
@@ -90,7 +96,7 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self = self else { result(nil); return }
       switch call.method {
-      case "start": self.start(); result(nil)
+      case "start": self.start(demo: (call.arguments as? [String: Any])?["demo"] as? Bool == true); result(nil)
       case "render":
         if self.started, self.tracked, let points = call.arguments as? [[String: Any]], points.count <= 200 {
           self.draw(points); self.lease = ProcessInfo.processInfo.systemUptime
@@ -105,18 +111,19 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
   }
 
   func view() -> UIView { scene }
-  private func start() {
+  private func start(demo: Bool) {
     guard !started, !stopped, ARWorldTrackingConfiguration.isSupported,
       AVCaptureDevice.authorizationStatus(for: .video) == .authorized,
-      location.authorizationStatus == .authorizedWhenInUse || location.authorizationStatus == .authorizedAlways,
-      location.accuracyAuthorization == .fullAccuracy else { fail("ARKit support or camera/precise location permission unavailable. Use the map."); return }
+      demo || ((location.authorizationStatus == .authorizedWhenInUse || location.authorizationStatus == .authorizedAlways) &&
+      location.accuracyAuthorization == .fullAccuracy) else { fail("ARKit support or camera/precise location permission unavailable. Use the map."); return }
+    self.demo = demo
     started = true
     opened = ProcessInfo.processInfo.systemUptime
     let configuration = ARWorldTrackingConfiguration()
     configuration.worldAlignment = .gravity
     // Local visual-inertial tracking only; no geo/cloud anchors or image upload.
     scene.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
-    location.startUpdatingLocation()
+    if !demo { location.startUpdatingLocation() }
     let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
       guard let self = self, self.started else { return }
       let now = ProcessInfo.processInfo.systemUptime
@@ -144,7 +151,7 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
     fail("Guardian location failed (code \((error as NSError).code)). Use the map.")
   }
   func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-    if started && (manager.accuracyAuthorization != .fullAccuracy ||
+    if started && !demo && (manager.accuracyAuthorization != .fullAccuracy ||
       !(manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse)) { fail("Precise location permission lost. Use the map.") }
   }
   func session(_ session: ARSession, didFailWithError error: Error) {
@@ -165,11 +172,11 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
       lastPose = frame.timestamp
       let pose = frame.camera.transform
       channel.invokeMethod("pose", arguments: [
-        "x": Double(pose.columns.3.x), "z": Double(pose.columns.3.z),
+        "x": Double(pose.columns.3.x), "y": Double(pose.columns.3.y), "z": Double(pose.columns.3.z),
         "forwardX": Double(-pose.columns.2.x), "forwardZ": Double(-pose.columns.2.z)
       ])
     }
-    guard let fix = fix, fix.timestamp.timeIntervalSince1970 > lastFix else { return }
+    guard !demo, let fix = fix, fix.timestamp.timeIntervalSince1970 > lastFix else { return }
     let age = Date().timeIntervalSince(fix.timestamp) - (uptime - frame.timestamp)
     // Do not pair cached positions with a newer camera pose.
     guard age >= 0 && age <= 0.2 else { return }
@@ -193,11 +200,18 @@ final class GuardianArView: NSObject, FlutterPlatformView, ARSessionDelegate, CL
         [x, y, z, radius, vertical].allSatisfy({ $0.isFinite }),
         radius > 0, radius <= 25,
         (p["heightMode"] as? String == "horizontal" ? vertical == 0 : vertical > 0 && vertical <= 10) else { previous = nil; continue }
-      let color: UIColor = p["source"] as? String == "watch" ? .systemOrange : .cyan
+      let color: UIColor = p["source"] as? String == "demo" ? .systemPink : p["source"] as? String == "watch" ? .systemOrange : .cyan
       let material = UnlitMaterial(color: color)
       let group = Entity()
       group.position = SIMD3<Float>(Float(x), Float(y), Float(z))
-      group.addChild(ModelEntity(mesh: .generateSphere(radius: 0.18), materials: [material]))
+      let marker = ModelEntity(mesh: .generateSphere(radius: 0.18), materials: [material])
+      if p["source"] as? String == "demo", p["wearer"] as? Bool == true {
+        marker.position.y = 1.2
+        let body = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(0.3, 0.8, 0.2)), materials: [material])
+        body.position.y = 0.6
+        group.addChild(body)
+      }
+      group.addChild(marker)
       // A metric horizontal annulus, not a screen-space compass decoration.
       var positions = [SIMD3<Float>]()
       var indices = [UInt32]()

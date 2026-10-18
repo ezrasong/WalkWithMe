@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/server.js';
+import { localHorizontal } from '../src/ar.js';
 
 const motionBatch = Buffer.from([0x1f, 0x8b, 8, 0]);
 const motionHeaders = { 'Content-Type': 'application/gzip', 'X-Kaze-Motion-Consent': '1' };
@@ -21,6 +22,58 @@ async function fixture(t, opts = {}) {
   t.after(async () => { if (app.server.listening) await new Promise(resolve => app.server.close(resolve)); });
   return { app, base, request, create, time: () => clock, jump: ms => { clock += ms; app.tick(); } };
 }
+
+const demoRoute = [{latitude:43,longitude:-79},{latitude:43.001,longitude:-79},{latitude:43.001,longitude:-78.999}];
+async function sharedDemo(f) {
+ return (await f.request('/api/sessions',{body:{consent:true,simulation:true,sensorMode:'simulated',name:'Virtual wearer',
+   liveSharing:true,liveSharingConsent:true,intervalSeconds:3600}})).body;
+}
+test('shared demo drives identical guardian map and AR evidence while retaining simulated provenance',async t=>{
+ const f=await fixture(t),s=await sharedDemo(f),root=`/api/sessions/${s.id}`;
+ const started=await f.request(`${root}/demo-walk`,{token:s.ownerToken,body:{command:'start',consent:true,route:demoRoute}});
+ assert.equal(started.status,200);assert.equal(started.body.demoWalk.distance,0);assert.equal(started.body.phase,'armed');
+ f.jump(10000);
+ const owner=(await f.request(root,{token:s.ownerToken})).body;
+ const guardian=(await f.request(root,{token:s.guardianToken})).body;
+ assert.equal(guardian.demoWalk.distance,12);assert.deepEqual(guardian.geography,owner.geography);
+ assert.equal(guardian.geography.latest.mock,true);assert.equal(guardian.geography.latest.simulated,true);
+ assert.equal(guardian.geography.latest.provider,'kaze-demo');assert.ok(guardian.geography.paths[0].points.length>5);
+ const ar=await f.request(`${root}/ar`,{token:s.guardianToken});
+ assert.equal(ar.status,200);assert.equal(ar.body.available,true);assert.equal(ar.body.simulated,true);
+ const expected=localHorizontal(ar.body.frame.anchor,guardian.geography.latest),actual=ar.body.paths.at(-1).points.at(-1);
+ assert.equal(actual.x,expected.x);assert.equal(actual.z,expected.z);assert.equal(actual.fixAt,guardian.geography.latest.fixAt);
+ assert.equal(ar.body.latestId,actual.id);
+ assert.equal(f.app.store.events(s.id).length,0);
+});
+test('shared demo pause, speed, resume and restart are server-clock based and never move the safety deadline',async t=>{
+ const f=await fixture(t),s=await sharedDemo(f),root=`/api/sessions/${s.id}`;
+ const control=body=>f.request(`${root}/demo-walk`,{token:s.ownerToken,body});
+ await control({command:'start',consent:true,route:demoRoute});f.jump(5000);
+ const paused=(await control({command:'pause'})).body;assert.equal(paused.demoWalk.distance,6);
+ f.jump(60000);const still=(await f.request(root,{token:s.guardianToken})).body;
+ assert.equal(still.demoWalk.distance,6);assert.equal(still.geography.ageMs,0);
+ await control({command:'speed',speed:4});await control({command:'resume'});f.jump(10000);
+ const moved=(await f.request(root,{token:s.ownerToken})).body;assert.equal(moved.demoWalk.distance,54);assert.equal(moved.dueAt,s.dueAt);
+ const before=(await f.request(`${root}/ar`,{token:s.ownerToken})).body.frame.anchor.id;
+ const restarted=(await control({command:'restart'})).body;assert.equal(restarted.demoWalk.distance,0);
+ const after=(await f.request(`${root}/ar`,{token:s.ownerToken})).body.frame.anchor.id;assert.notEqual(before,after);
+ f.jump(360000);const done=(await f.request(root,{token:s.ownerToken})).body;
+ assert.equal(done.demoWalk.running,false);assert.equal(done.demoWalk.distance,done.demoWalk.total);
+ assert.deepEqual([done.geography.latest.latitude,done.geography.latest.longitude],[demoRoute.at(-1).latitude,demoRoute.at(-1).longitude]);
+ assert.ok(done.geography.mapPaths.flatMap(p=>p.points).some(p=>p.latitude===demoRoute[1].latitude && p.longitude===demoRoute[1].longitude), 'accelerated demo keeps the exact street corner');
+});
+test('demo controls cannot inject a route into live sessions, cross roles, or bypass consent and lifecycle',async t=>{
+ const f=await fixture(t),live=await f.create(),s=await sharedDemo(f),root=`/api/sessions/${s.id}`;
+ const start={command:'start',consent:true,route:demoRoute};
+ assert.equal((await f.request(`/api/sessions/${live.id}/demo-walk`,{token:live.ownerToken,body:start})).status,409);
+ for(const token of [s.guardianToken,s.watchToken,undefined]) assert.equal((await f.request(`${root}/demo-walk`,{token,body:start})).status,401);
+ for(const body of [{...start,consent:false},{...start,route:[]},{...start,route:[demoRoute[0],demoRoute[0]]},{...start,route:[demoRoute[0],{latitude:80,longitude:0}]}])
+   assert.equal((await f.request(`${root}/demo-walk`,{token:s.ownerToken,body})).status,400);
+ await f.request(`${root}/demo-walk`,{token:s.ownerToken,body:start});
+ await f.request(`${root}/resolve`,{token:s.ownerToken,body:{confirm:true}});
+ assert.equal((await f.request(`${root}/demo-walk`,{token:s.ownerToken,body:{command:'resume'}})).status,409);
+ assert.equal((await f.request(`${root}/ar`,{token:s.guardianToken})).status,409);
+});
 
 test('guardian QR/code invitations require owner access and preserve guardian scope and sharing consent', async t => {
   const f = await fixture(t), s = await f.create(), route = `/api/sessions/${s.id}/guardian-invite`;

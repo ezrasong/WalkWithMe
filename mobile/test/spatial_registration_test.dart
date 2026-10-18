@@ -69,6 +69,65 @@ void main() {
     ],
   };
 
+  test('Geospatial transforms preserve EUS yaw, moving origin, height and uncertainty gates', () {
+    final r = SpatialRegistration(anchor);
+    final m = <String, Object>{
+      't': 1.0,
+      'x': 7.0,
+      'y': 2.0,
+      'z': -4.0,
+      'latitude': 0.0,
+      'longitude': 0.0,
+      'accuracy': 1.0,
+      'ageMs': 0.0,
+      'mock': false,
+      'yaw': math.pi / 2,
+      'yawAccuracy': 2.0,
+    };
+    expect(r.addGeospatial(m), true);
+    expect(r.ready, true);
+    expect(r.checks, 0); // Google localization is not the local walking check.
+    var p = r.breadcrumbs(packet([point(x: 10, z: 5, y: null)])).first;
+    expect(p['x'], closeTo(2, 1e-8));
+    expect(p['z'], closeTo(6, 1e-8));
+    expect(p['y'], closeTo(.7, 1e-8));
+    expect(p['heightMode'], 'horizontal');
+    expect(p['uncertainty'] as double, greaterThan(3));
+    final offset = localHorizontal(anchor, {
+      'latitude': 0.0,
+      'longitude': .0001,
+    });
+    expect(
+      r.addGeospatial({
+        ...m,
+        't': 2.0,
+        'longitude': .0001,
+        'z': -4.0 + offset.x,
+        'altitude': 101.0,
+        'verticalAccuracy': 1.0,
+        'altitudeDatum': 'WGS84-ellipsoid',
+      }),
+      true,
+    );
+    p = r.breadcrumbs(packet([point(x: 10, z: 5)])).first;
+    expect(p['x'], closeTo(2, 1e-8));
+    expect(p['z'], closeTo(6, 1e-8));
+    expect(p['y'], closeTo(3, 1e-8));
+    expect(p['heightMode'], 'measured');
+    for (final patch in [
+      {'yawAccuracy': 11},
+      {'yawAccuracy': 0},
+      {'yaw': double.nan},
+      {'accuracy': 6},
+      {'mock': true},
+      {'ageMs': 201},
+      {'t': 1.0},
+    ]) {
+      expect(r.addGeospatial({...m, 't': 3.0, ...patch}), false);
+    }
+    expect(r.breadcrumbs(packet([point(x: 70)])), isEmpty);
+  });
+
   test(
     'WGS84 projection matches backend cardinal and antimeridian fixtures',
     () {

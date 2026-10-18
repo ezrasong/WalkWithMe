@@ -267,7 +267,7 @@ void main() {
       await tap(tester, find.text('Guardian spatial AR'));
       await waitFor(
         tester,
-        find.textContaining('ARKit world tracking unsupported'),
+        find.text('Guardian camera guide'),
       );
       await capture(tester, '04-ar-simulator-fallback');
       expect(find.byType(SnackBar), findsNothing);

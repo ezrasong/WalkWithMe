@@ -515,6 +515,69 @@ class SessionController extends ChangeNotifier {
     }
     startPolling();
   });
+
+  Future<void> createSharedDemo(List<Map<String, Object>> route) => run(
+    () async {
+      if (access != null) {
+        throw const FormatException(
+          'Leave or end the current session before starting a shared demo.',
+        );
+      }
+      if (Platform.isAndroid) {
+        final status = await native.invokeMapMethod('status');
+        if (status?['active'] == true) {
+          throw const FormatException(
+            'End wearer recording before starting a shared demo.',
+          );
+        }
+      }
+      final data = await request(
+        validateBaseUrl(kazeBackendUrl),
+        '/api/sessions',
+        body: {
+          'name': 'Virtual wearer (demo)',
+          'consent': true,
+          'simulation': true,
+          'sensorMode': 'simulated',
+          'liveSharing': true,
+          'liveSharingConsent': true,
+          'intervalSeconds': 3600,
+          'graceSeconds': 30,
+          'retentionHours': 1,
+        },
+      );
+      access = SessionAccess(
+        baseUrl: kazeBackendUrl,
+        id: data['id'],
+        token: data['ownerToken'],
+        role: 'owner',
+        guardianToken: data['guardianToken'],
+        watchToken: data['watchToken'],
+      );
+      snapshot = data;
+      received = DateTime.now();
+      await storage.write(key: 'session', value: jsonEncode(access!.toJson()));
+      startPolling();
+      snapshot = await api(
+        action: 'demo-walk',
+        body: {'command': 'start', 'consent': true, 'route': route},
+      );
+      received = DateTime.now();
+    },
+  );
+
+  Future<void> controlDemo(String command, {int? speed}) => run(() async {
+    if (guardian || snapshot?['sensorMode'] != 'simulated') {
+      throw const FormatException(
+        'Only the demo owner controls simulated movement.',
+      );
+    }
+    snapshot = await api(
+      action: 'demo-walk',
+      body: {'command': command, 'speed': ?speed},
+    );
+    received = DateTime.now();
+  });
   Future<GuardianInvitation> createGuardianInvitation() async {
     final current = access;
     if (current == null ||

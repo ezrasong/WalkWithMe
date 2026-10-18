@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'session.dart';
 import 'direction_preview.dart';
@@ -15,6 +17,7 @@ import 'guardian_pairing.dart';
 import 'motion_capture.dart';
 import 'device_setup.dart';
 import 'trail_map.dart';
+import 'backend.dart';
 export 'trail_map.dart';
 
 void main() {
@@ -363,6 +366,20 @@ class _SessionScreenState extends State<SessionScreen>
         icon: const Icon(Icons.settings_suggest_outlined),
         label: const Text('Permissions & background setup'),
       ),
+      OutlinedButton.icon(
+        onPressed: () => openGuardianCamera(GuardianAr(session: c, demo: true)),
+        icon: const Icon(Icons.view_in_ar),
+        label: const Text('Local camera animation'),
+      ),
+      FilledButton.icon(
+        onPressed: c.busy ? null : startSharedDemo,
+        icon: const Icon(Icons.directions_walk),
+        label: const Text('Start shared walking demo'),
+      ),
+      note(
+        'Demo movement is simulated and shared with your paired guardian. The map and guardian camera use the same route. No real wearer recording starts.',
+      ),
+      if (Platform.isAndroid) arPrivacyNotice(),
       const SizedBox(height: 20),
       if (Platform.isAndroid)
         SegmentedButton<int>(
@@ -485,7 +502,7 @@ class _SessionScreenState extends State<SessionScreen>
         'OpenFreeMap serves vector maps using OpenStreetMap data and receives the viewed area and IP address. You can turn the street map off in Settings.',
       ),
       note(
-        'Location and camera permission are requested only for their respective features. The optional guardian camera preview stays on that phone.',
+        'Location and camera permission are requested only for their respective features. Local camera modes process images on the guardian phone. Google-assisted alignment asks before sharing sensor data with Google.',
       ),
     ],
   );
@@ -633,6 +650,11 @@ class _SessionScreenState extends State<SessionScreen>
       ),
       if (s['sensorMode'] == 'simulated')
         note('Simulated readings · not hardware measurements'),
+      if (s['demoWalk'] != null)
+        OutlinedButton(
+          onPressed: showSessionDetails,
+          child: const Text('Demo walk controls & camera'),
+        ),
       if (!c.guardian && phase != 'resolved') ...[
         const SizedBox(height: 12),
         FilledButton.icon(
@@ -729,10 +751,171 @@ class _SessionScreenState extends State<SessionScreen>
     );
   }
 
-  Future<void> openGuardianCamera(Widget screen) {
+  Widget arPrivacyNotice() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Camera AR runs on Google Play Services for AR (ARCore), provided by Google and governed by the Google Privacy Policy.',
+      ),
+      TextButton(
+        onPressed: () => launchUrl(
+          Uri.parse('https://policies.google.com/privacy'),
+          mode: LaunchMode.externalApplication,
+        ),
+        child: const Text('Google Privacy Policy'),
+      ),
+    ],
+  );
+
+  Future<void> openGuardianCamera(Widget screen) async {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    return Navigator.of(context)
+    if (Platform.isAndroid && screen is GuardianAr && !screen.demo) {
+      final google = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Choose camera alignment'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Google-assisted alignment uses outdoor visual features to place the recorded trail. It needs internet, a compatible phone and available coverage.',
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'To power this session, Google will process sensor data (e.g., camera and location).',
+                ),
+                TextButton(
+                  onPressed: () => launchUrl(
+                    Uri.parse(
+                      'https://support.google.com/ar?p=how-google-play-services-for-ar-handles-your-data',
+                    ),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  child: const Text('Learn more'),
+                ),
+                const Text(
+                  'Local alignment processes the camera on this phone and requires an outdoor walking baseline. Unsupported AR phones use a GPS + compass guide.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Use local alignment'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Agree & use Google'),
+            ),
+          ],
+        ),
+      );
+      if (google == null || !mounted) return;
+      screen = GuardianAr(session: c, geospatial: google);
+    }
+    if (!mounted) return;
+    await Navigator.of(context)
         .push<void>(MaterialPageRoute(builder: (_) => screen));
+  }
+
+  Future<void> startSharedDemo() async {
+    try {
+      List<Map<String, Object>> route;
+      if (kazeDemoRoute.isNotEmpty) {
+        route = (jsonDecode(kazeDemoRoute) as List)
+            .map(
+              (p) => {
+                'latitude': (p['latitude'] as num).toDouble(),
+                'longitude': (p['longitude'] as num).toDouble(),
+                if (p['street'] is String) 'street': p['street'] as String,
+              },
+            )
+            .toList();
+      } else {
+        var permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        final p = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.best,
+            timeLimit: Duration(seconds: 20),
+          ),
+        );
+        if (p.isMocked || !p.accuracy.isFinite || p.accuracy > 20) {
+          throw const FormatException(
+            'Wait outdoors for a precise location to place the shared demo.',
+          );
+        }
+        route = [
+          {'latitude': p.latitude, 'longitude': p.longitude},
+          {'latitude': p.latitude + .0004, 'longitude': p.longitude},
+          {'latitude': p.latitude + .0004, 'longitude': p.longitude + .0004},
+        ];
+      }
+      if (mounted) await c.createSharedDemo(route);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start shared demo: $error')),
+        );
+      }
+    }
+  }
+
+  Widget sharedDemoControls() {
+    final walk = c.snapshot?['demoWalk'] as Map?;
+    if (c.snapshot?['sensorMode'] != 'simulated' || walk == null) {
+      return const SizedBox();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'DEMO: virtual wearer - ${(walk['distance'] as num).round()} / ${(walk['total'] as num).round()} m',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const Text(
+          'Generated positions, not a real person. This route is shared with the guardian.',
+        ),
+        if (!c.guardian)
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton(
+                onPressed: c.busy
+                    ? null
+                    : () => c.controlDemo(
+                        walk['running'] == true ? 'pause' : 'resume',
+                      ),
+                child: Text(
+                  walk['running'] == true ? 'Pause walk' : 'Resume walk',
+                ),
+              ),
+              TextButton(
+                onPressed: c.busy ? null : () => c.controlDemo('restart'),
+                child: const Text('Restart walk'),
+              ),
+              for (final speed in [1, 2, 4])
+                ChoiceChip(
+                  label: Text('${speed}x'),
+                  selected: walk['speed'] == speed,
+                  onSelected: c.busy
+                      ? null
+                      : (_) => c.controlDemo('speed', speed: speed),
+                ),
+            ],
+          ),
+        OutlinedButton.icon(
+          onPressed: () => openGuardianCamera(GuardianAr(session: c)),
+          icon: const Icon(Icons.view_in_ar),
+          label: const Text('Track shared trail in camera'),
+        ),
+      ],
+    );
   }
 
   Future<void> scanGuardianQr() async {
@@ -849,6 +1032,7 @@ class _SessionScreenState extends State<SessionScreen>
                     label: const Text('Camera direction preview'),
                   ),
               ],
+              if (s['demoWalk'] != null) sharedDemoControls(),
               const Divider(height: 24),
               Text(
                 'Connection',
@@ -857,8 +1041,10 @@ class _SessionScreenState extends State<SessionScreen>
               note(c.connection),
               if (!c.guardian)
                 note(
-                  c.device['status']?.toString() ??
-                      'Waiting for recorder status.',
+                  s['sensorMode'] == 'simulated'
+                      ? 'Simulated session. Physical wearer recording is off.'
+                      : c.device['status']?.toString() ??
+                            'Waiting for recorder status.',
                 ),
               for (final warning
                   in (s['geography']?['warnings'] as List? ?? []))
@@ -953,6 +1139,13 @@ class _SessionScreenState extends State<SessionScreen>
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
       children: [
         section('Device setup', [
+          if (Platform.isAndroid) arPrivacyNotice(),
+          action(
+            Icons.view_in_ar,
+            'Local camera animation',
+            () => openGuardianCamera(GuardianAr(session: c, demo: true)),
+            subtitle: 'A local virtual wearer and camera trail. No GPS or live alert required.',
+          ),
           action(
             Icons.settings_suggest_outlined,
             'Permissions & background setup',
@@ -972,6 +1165,8 @@ class _SessionScreenState extends State<SessionScreen>
                   'Automatic motion streaming and optional private capture.',
             ),
         ]),
+        if (s['sensorMode'] == 'simulated')
+          section('Shared walking demo', [sharedDemoControls()]),
         if (c.guardian && phase != 'resolved')
           section('Guardian alerts', [guardianMonitoring()]),
         section('Appearance', [

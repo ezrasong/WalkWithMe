@@ -12,6 +12,7 @@ import { guardianArTrail } from './ar.js';
 import { applePushFromEnv, GuardianPushDelivery } from './apple-push.js';
 import { MotionEvaluator } from './motion.js';
 import { GuardianInvites } from './guardian-invites.js';
+import { advanceDemo, controlDemo, demoEvents } from './demo-walk.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, applePush = null, motion = new MotionEvaluator() } = {}) {
@@ -21,7 +22,10 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
   function current(id) {
     let s = store.get(id);
     if (!s) throw new Problem(404, 'Session not found');
-    const updated = advance(s, now());
+    const updated = { ...advance(s, now()) };
+    if (updated.phase === 'expired') delete updated.demoWalk;
+    if (s.sensorMode === 'simulated' && s.demoWalk && !['resolved', 'expired'].includes(updated.phase))
+      updated.demoWalk = advanceDemo(s.demoWalk, now());
     if (['expired', 'resolved'].includes(updated.phase)) { motionLimits.delete(id); invites.invalidate(id); }
     if (updated.phase === 'expired' && s.phase !== 'expired') { store.clearEvents(s.id); updated.origin = 'Expired'; updated.name = 'Expired session'; }
     if (['expired', 'resolved'].includes(updated.phase)) store.removeGuardianPush(id);
@@ -38,18 +42,19 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
     return role;
   }
   function snapshot(s, role) {
-    const { ownerHash, guardianHash, watchHash, ...safe } = s;
+    const { ownerHash, guardianHash, watchHash, demoWalk, ...safe } = s;
     const shared = role === 'owner' || (role === 'guardian' && !s.guardianRevokedAt && (s.phase === 'alert' || (s.liveSharing === true && ['armed', 'challenge'].includes(s.phase))));
     if (!shared) delete safe.origin;
-    const events = shared ? store.events(s.id) : [];
+    const events = shared ? [...store.events(s.id), ...demoEvents(demoWalk, now())] : [];
     const sources = {};
     for (const e of events) {
       const prev = sources[e.source];
       if (!prev || e.at >= prev.lastAt) sources[e.source] = { lastAt: e.at, maxSeq: Math.max(e.seq, prev?.maxSeq ?? 0), battery: e.battery ?? prev?.battery, sensors: e.sensors ?? prev?.sensors };
       else prev.maxSeq = Math.max(prev.maxSeq, e.seq);
     }
-    const geography = shared ? geographicTrail(events, now()) : null;
+    const geography = shared ? geographicTrail(events, now(), { simulation: s.sensorMode === 'simulated' }) : null;
     return { ...safe, serverNow: now(), role, shared, sources, geography,
+      demoWalk: shared && demoWalk ? { runId: demoWalk.runId, running: demoWalk.running, distance: demoWalk.distance, total: demoWalk.total, speed: demoWalk.speed } : null,
       activity: shared ? store.activity(s.id) : [],
       guardianConnected: !!s.guardianSeenAt && now() - s.guardianSeenAt < 15000,
       trail: shared ? reconstruct(events, s) : null,
@@ -107,7 +112,7 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           initialHeading: number(b.initialHeading ?? 0, 0, 360, 'initial heading'), ownerHash: hash(owner), guardianHash: hash(guardian), watchHash: hash(watch) };
         store.save(s); store.recordActivity(s.id, 'started', now(), 'owner'); return json(201, { ...snapshot(s, 'owner'), ownerToken: owner, guardianToken: guardian, watchToken: watch });
       }
-      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push|guardian-invite|motion))?$/.exec(url.pathname);
+      const match = /^\/api\/sessions\/([a-f0-9-]{36})(?:\/(events|check-in|acknowledge|arrived|resolve|pair|revoke-guardian|ar|guardian-status|guardian-push|guardian-invite|motion|demo-walk))?$/.exec(url.pathname);
       if (match) {
         const id = match[1], action = match[2]; let s = current(id);
         if (action === 'guardian-invite') {
@@ -164,8 +169,8 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
         if (action === 'ar') {
           auth(req, s, ['owner', 'guardian']);
           if (req.method !== 'GET') throw new Problem(405, 'Method not allowed');
-          if (s.phase !== 'alert') throw new Problem(409, 'An active assistance request is required');
-          return json(200, guardianArTrail(store.events(s.id), now()));
+          if (s.phase !== 'alert' && !(s.sensorMode === 'simulated' && s.demoWalk && s.liveSharing && s.phase !== 'resolved')) throw new Problem(409, 'An active assistance request is required');
+          return json(200, guardianArTrail([...store.events(s.id), ...demoEvents(s.demoWalk, now())], now(), { simulation: s.sensorMode === 'simulated' }));
         }
         if (req.method === 'GET' && !action) {
           const role = auth(req, s, ['owner', 'guardian', 'watch']);
@@ -181,6 +186,12 @@ export function createApp({ dbPath = ':memory:', now = Date.now, tickMs = 1000, 
           s = current(id); auth(req, s, [role]);
           if (action === 'pair') return json(200, { id, watchToken: b.rotate === true ? (() => { const next = token(); s.watchHash = hash(next); store.save(s); return next; })() : null });
           if (['resolved'].includes(s.phase)) throw new Problem(409, 'Session has ended');
+          if (action === 'demo-walk') {
+            const demoWalk = controlDemo(s, b, now());
+            s.demoWalk = demoWalk;
+            store.save(s);
+            return json(200, snapshot(s, role));
+          }
           if (action === 'revoke-guardian') {
             if (b.confirm !== true) throw new Problem(400, 'Explicit confirmation required');
             s.guardianHash = hash(token()); s.guardianRevokedAt = now(); s.liveSharing = false;

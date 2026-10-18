@@ -23,6 +23,7 @@ import java.util.concurrent.Executors;
 public final class MainActivity extends FlutterActivity {
     private MethodChannel.Result permissionResult;
     private MethodChannel.Result arPermissionResult;
+    private boolean arDemoPermission;
     private final java.util.concurrent.ExecutorService worker = Executors.newSingleThreadExecutor();
     @Override public void configureFlutterEngine(FlutterEngine engine) {
         super.configureFlutterEngine(engine);
@@ -51,20 +52,32 @@ public final class MainActivity extends FlutterActivity {
                 case "prepareGuardianAr": {
                     if (Config.prefs(this).getBoolean("active", false)) { result.success("End wearer recording before using a guardian camera."); break; }
                     if (arPermissionResult != null || permissionResult != null) { result.success("Permission request pending."); break; }
+                    boolean demo = Boolean.TRUE.equals(call.argument("demo"));
                     try {
-                        if (!com.google.ar.core.ArCoreApk.getInstance().checkAvailability(this).isSupported()) { result.success("ARCore unsupported or still checking. Use the map."); break; }
+                        com.google.ar.core.ArCoreApk.Availability availability = com.google.ar.core.ArCoreApk.getInstance().checkAvailability(this);
+                        if (demo && availability != com.google.ar.core.ArCoreApk.Availability.SUPPORTED_INSTALLED) { result.success("demo-camera"); break; }
+                        if (!availability.isSupported()) { result.success("camera-guide"); break; }
                         if (com.google.ar.core.ArCoreApk.getInstance().requestInstall(this, true) != com.google.ar.core.ArCoreApk.InstallStatus.INSTALLED) {
                             result.success("ARCore install requested. Reopen AR after installation."); break;
                         }
                         ArrayList<String> needed = new ArrayList<>();
                         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.CAMERA);
-                        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        if (!demo && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                             needed.add(Manifest.permission.ACCESS_FINE_LOCATION); needed.add(Manifest.permission.ACCESS_COARSE_LOCATION);
                         }
                         if (needed.isEmpty()) result.success("ready");
-                        else { arPermissionResult = result; requestPermissions(needed.toArray(new String[0]), 8); }
+                        else { arDemoPermission = demo; arPermissionResult = result; requestPermissions(needed.toArray(new String[0]), 8); }
                     } catch (Exception e) { result.success("ARCore unavailable. Use the map."); }
                     break;
+                }
+                case "magneticDeclination": {
+                    Number latitude = call.argument("latitude"), longitude = call.argument("longitude");
+                    if (latitude == null || longitude == null || !Double.isFinite(latitude.doubleValue()) ||
+                        !Double.isFinite(longitude.doubleValue()) || Math.abs(latitude.doubleValue()) > 90 || Math.abs(longitude.doubleValue()) > 180) {
+                        result.error("location", "Valid foreground location required", null); break;
+                    }
+                    result.success((double)new android.hardware.GeomagneticField(latitude.floatValue(), longitude.floatValue(), 0f,
+                        System.currentTimeMillis()).getDeclination()); break;
                 }
                 case "permissions": requestRecordingPermissions(result); break;
                 case "guardianPermissions": {
@@ -145,7 +158,7 @@ public final class MainActivity extends FlutterActivity {
         if ((r == 7 || r == 9) && permissionResult != null) { permissionResult.success(null); permissionResult = null; }
         if (r == 8 && arPermissionResult != null) {
             arPermissionResult.success(checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED &&
-                checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ? "ready" : "Camera and precise location permission required. Use the map.");
+                (arDemoPermission || checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) ? "ready" : "Camera permission required; live AR also needs precise location.");
             arPermissionResult = null;
         }
     }

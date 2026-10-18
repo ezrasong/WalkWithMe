@@ -59,6 +59,63 @@ void main() {
     },
   );
   test(
+    'shared demo creation and controls never start physical wearer recording',
+    () async {
+      final calls = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SessionController.native, (call) async {
+            calls.add(call.method);
+            return call.method == 'status' ? {'active': false} : null;
+          });
+      final bodies = <Map>[];
+      final controller = SessionController(
+        client: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map;
+          bodies.add(body);
+          if (request.url.path == '/api/sessions') {
+            return http.Response(
+              jsonEncode({
+                'id': id,
+                'ownerToken': token,
+                'guardianToken': token,
+                'watchToken': token,
+                'phase': 'armed',
+                'sensorMode': 'simulated',
+                'serverNow': 1000,
+              }),
+              201,
+            );
+          }
+          expect(request.url.path, '/api/sessions/$id/demo-walk');
+          return http.Response(
+            jsonEncode({
+              'id': id,
+              'phase': 'armed',
+              'sensorMode': 'simulated',
+              'serverNow': 1000,
+              'demoWalk': {'running': body['command'] != 'pause'},
+            }),
+            200,
+          );
+        }),
+      );
+      addTearDown(controller.dispose);
+      await controller.createSharedDemo([
+        {'latitude': 0, 'longitude': 0},
+        {'latitude': .001, 'longitude': 0},
+      ]);
+      expect(controller.access?.role, 'owner');
+      expect(controller.snapshot?['demoWalk']?['running'], true);
+      expect(bodies[0]['sensorMode'], 'simulated');
+      expect(bodies[0]['liveSharingConsent'], true);
+      expect(bodies[1]['command'], 'start');
+      await controller.controlDemo('pause');
+      expect(controller.snapshot?['demoWalk']?['running'], false);
+      expect(calls, isNot(contains('start')));
+      expect(calls, isNot(contains('permissions')));
+    },
+  );
+  test(
     'guardian links preserve scoped credentials and reject unsafe origins',
     () {
       final a = SessionAccess.guardian(

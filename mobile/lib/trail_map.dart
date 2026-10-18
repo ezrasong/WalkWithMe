@@ -63,13 +63,31 @@ List<ml.Layer> trailLayers(Map<String, dynamic> snapshot) {
       strokeWidth: 3,
       strokeColor: Colors.white,
     ),
+    if (snapshot['guardianLocation'] is Map)
+      ml.CircleLayer(
+        points: [
+          ml.Feature(
+            geometry: ml.Point(trailPoint(snapshot['guardianLocation'] as Map)),
+          ),
+        ],
+        radius: 7,
+        color: Colors.green,
+        strokeWidth: 2,
+        strokeColor: Colors.white,
+      ),
   ];
 }
 
 class TrailMap extends StatefulWidget {
   final Map<String, dynamic> snapshot;
   final bool tiles;
-  const TrailMap({super.key, required this.snapshot, required this.tiles});
+  final bool compact;
+  const TrailMap({
+    super.key,
+    required this.snapshot,
+    required this.tiles,
+    this.compact = false,
+  });
   @override
   State<TrailMap> createState() => _TrailMapState();
 }
@@ -126,6 +144,10 @@ class _TrailMapState extends State<TrailMap> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.tiles != widget.tiles) updateStyle();
     final previous = (oldWidget.snapshot['geography'] as Map?)?['latest'];
+    if (widget.compact && loaded && controller != null) {
+      fitTrail();
+      return;
+    }
     if (following &&
         controller != null &&
         latest != null &&
@@ -186,6 +208,8 @@ class _TrailMapState extends State<TrailMap> {
       for (final path in paths)
         for (final fix in path['points']) trailPoint(fix),
       if (latest != null) trailPoint(latest!),
+      if (widget.snapshot['guardianLocation'] is Map)
+        trailPoint(widget.snapshot['guardianLocation'] as Map),
     ];
     if (points.isEmpty) return;
     setState(() => following = false);
@@ -199,7 +223,9 @@ class _TrailMapState extends State<TrailMap> {
       cameraAction(
         (map) => map.fitBounds(
           bounds: bounds,
-          padding: const EdgeInsets.fromLTRB(36, 72, 72, 36),
+          padding: widget.compact
+              ? const EdgeInsets.fromLTRB(12, 12, 12, 24)
+              : const EdgeInsets.fromLTRB(36, 72, 72, 36),
           nativeDuration: Duration(
             milliseconds: MediaQuery.disableAnimationsOf(context) ? 1 : 250,
           ),
@@ -221,6 +247,12 @@ class _TrailMapState extends State<TrailMap> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     if (latest == null) {
+      if (widget.compact) {
+        return ColoredBox(
+          color: colors.surfaceContainerLow,
+          child: const Center(child: Text('Waiting for shared locations')),
+        );
+      }
       return ColoredBox(
         color: colors.surfaceContainerLow,
         child: Center(
@@ -276,6 +308,7 @@ class _TrailMapState extends State<TrailMap> {
                 loaded = true;
                 failed = false;
               });
+              if (widget.compact) fitTrail();
             }
           },
           onEvent: (event) {
@@ -292,95 +325,98 @@ class _TrailMapState extends State<TrailMap> {
           },
           layers: trailLayers(widget.snapshot),
         ),
-        Positioned(
-          top: 12,
-          left: 12,
-          right: 72,
-          child: IgnorePointer(
-            child: Material(
-              color: colors.surface,
-              elevation: 2,
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Wrap(
-                  spacing: 16,
-                  runSpacing: 8,
-                  children: [
-                    legend(
-                      Icons.phone_android,
-                      'Phone',
-                      phoneTrailColor,
-                      context,
-                    ),
-                    legend(
-                      Icons.watch_outlined,
-                      'Watch · dashed',
-                      watchTrailColor,
-                      context,
-                    ),
-                  ],
+        if (!widget.compact)
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 72,
+            child: IgnorePointer(
+              child: Material(
+                color: colors.surface,
+                elevation: 2,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Wrap(
+                    spacing: 16,
+                    runSpacing: 8,
+                    children: [
+                      legend(
+                        Icons.phone_android,
+                        'Phone',
+                        phoneTrailColor,
+                        context,
+                      ),
+                      legend(
+                        Icons.watch_outlined,
+                        'Watch · dashed',
+                        watchTrailColor,
+                        context,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        Positioned(
-          top: 12,
-          right: 12,
-          child: Material(
-            color: colors.surface,
-            elevation: 3,
-            borderRadius: BorderRadius.circular(14),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                control(
-                  'Recenter on last location',
-                  following ? Icons.my_location : Icons.location_searching,
-                  recenter,
-                ),
-                control(
-                  'Show entire recorded trail',
-                  Icons.route_outlined,
-                  fitTrail,
-                ),
-              ],
+        if (!widget.compact)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Material(
+              color: colors.surface,
+              elevation: 3,
+              borderRadius: BorderRadius.circular(14),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  control(
+                    'Recenter on last location',
+                    following ? Icons.my_location : Icons.location_searching,
+                    recenter,
+                  ),
+                  control(
+                    'Show entire recorded trail',
+                    Icons.route_outlined,
+                    fitTrail,
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        Positioned(
-          bottom: 48,
-          right: 12,
-          child: Material(
-            color: colors.surface,
-            elevation: 3,
-            borderRadius: BorderRadius.circular(14),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                control(
-                  'Zoom out',
-                  Icons.remove,
-                  () => cameraAction(
-                    (map) => map.moveCamera(
-                      zoom: (map.getCamera().zoom - 1).clamp(2, 20),
+        if (!widget.compact)
+          Positioned(
+            bottom: 48,
+            right: 12,
+            child: Material(
+              color: colors.surface,
+              elevation: 3,
+              borderRadius: BorderRadius.circular(14),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  control(
+                    'Zoom out',
+                    Icons.remove,
+                    () => cameraAction(
+                      (map) => map.moveCamera(
+                        zoom: (map.getCamera().zoom - 1).clamp(2, 20),
+                      ),
                     ),
                   ),
-                ),
-                control(
-                  'Zoom in',
-                  Icons.add,
-                  () => cameraAction(
-                    (map) => map.moveCamera(
-                      zoom: (map.getCamera().zoom + 1).clamp(2, 20),
+                  control(
+                    'Zoom in',
+                    Icons.add,
+                    () => cameraAction(
+                      (map) => map.moveCamera(
+                        zoom: (map.getCamera().zoom + 1).clamp(2, 20),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
         if (widget.tiles)
           Positioned(
             bottom: 4,

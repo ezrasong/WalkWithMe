@@ -4,7 +4,7 @@ export function meters(a, b) {
   const h = Math.sin(dlat / 2) ** 2 + Math.cos(a.latitude * rad) * Math.cos(b.latitude * rad) * Math.sin(dlon / 2) ** 2;
   return 6371000 * 2 * Math.asin(Math.sqrt(Math.min(1, h)));
 }
-export function geographicTrail(events, now) {
+export function geographicTrail(events, now, { simulation = false } = {}) {
   const fixes = events.filter(e => e.type === 'gps').map(e => ({ ...e, fixAt: e.fixAt ?? e.at,
     provider: e.provider ?? 'legacy', provenance: e.provenance ?? 'unknown' }))
     .sort((a, b) => a.fixAt - b.fixAt || a.at - b.at || Number(a.source === 'phone') - Number(b.source === 'phone'));
@@ -16,7 +16,10 @@ export function geographicTrail(events, now) {
     // network fix must not pull a precise GPS trail across the street.
     const buckets = new Map();
     for (const fix of fixes.filter(f => f.source === source)) {
-      const key = Math.floor(fix.fixAt / 1000), existing = buckets.get(key);
+      // Generated metre/corner samples are exact demo geometry, not competing
+      // physical providers. Keep corners even at accelerated playback speeds.
+      const key = simulation && fix.simulated === true && fix.provider === 'kaze-demo'
+        ? fix.id : Math.floor(fix.fixAt / 1000), existing = buckets.get(key);
       if (!existing || (existing.mock && !fix.mock) ||
           (!!existing.mock === !!fix.mock && fix.accuracy > 0 &&
             (existing.accuracy <= 0 || fix.accuracy < existing.accuracy))) buckets.set(key, fix);
@@ -25,7 +28,8 @@ export function geographicTrail(events, now) {
     for (const fix of buckets.values()) {
       const dt = previous ? fix.fixAt - previous.fixAt : 0;
       const distance = previous ? meters(previous, fix) : 0;
-      const reason = fix.mock ? 'Mock location' : fix.accuracy <= 0 || fix.accuracy > 25 ? 'Low location accuracy' :
+      const demo = simulation && fix.simulated === true && fix.provider === 'kaze-demo';
+      const reason = fix.mock && !demo ? 'Mock location' : fix.accuracy <= 0 || fix.accuracy > 25 ? 'Low location accuracy' :
         fix.fixAt > now ? 'Future location' : previous && dt <= 30000 &&
         (dt <= 0 || distance > 15 * dt / 1000 + previous.accuracy + fix.accuracy) ? 'Time overlap or location disagreement' : null;
       if (reason) {
@@ -50,7 +54,8 @@ export function geographicTrail(events, now) {
     const points = [];
     for (const fix of path.points) {
       const last = points.at(-1);
-      if (!last || meters(last, fix) > Math.max(last.accuracy, fix.accuracy)) points.push(fix);
+      if (!last || simulation && fix.simulated === true && fix.provider === 'kaze-demo' ||
+          meters(last, fix) > Math.max(last.accuracy, fix.accuracy)) points.push(fix);
     }
     // Preserve the live endpoint, even during a stationary interval.
     if (points.at(-1) !== path.points.at(-1)) points.push(path.points.at(-1));
@@ -61,6 +66,6 @@ export function geographicTrail(events, now) {
       ...(latest && now - latest.fixAt > 30000 ? ['Last location is stale. The person may have moved.'] : []),
       ...(fixes.some(f => f.source === 'watch') ? ['Watch location may come from the paired phone. Sources are shown separately.'] : []),
       ...(gaps.length ? ['Broken trail sections have missing or uncertain location. No route is inferred across them.'] : []),
-      ...(fixes.length ? ['Trail vertices use the most accurate fix per second and omit movement within reported precision. Raw readings are retained.'] : []),
-      ...(fixes.some(f => f.mock) ? ['Mock locations are test evidence, not physical measurements.'] : [])] };
+      ...(fixes.length ? [simulation ? 'Demo trail preserves the generated route samples and corners.' : 'Trail vertices use the most accurate fix per second and omit movement within reported precision. Raw readings are retained.'] : []),
+      ...(fixes.some(f => f.mock) ? [simulation ? 'DEMO: simulated locations are not physical measurements.' : 'Mock locations are test evidence, not physical measurements.'] : [])] };
 }

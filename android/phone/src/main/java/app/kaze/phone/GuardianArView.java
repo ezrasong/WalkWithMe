@@ -34,7 +34,7 @@ import java.util.Map;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
-/** Local camera tracking and metric geometry only. No images leave this view. */
+/** Metric camera geometry. Google Geospatial runs only after explicit opt-in. */
 public final class GuardianArView implements PlatformView, GLSurfaceView.Renderer, LocationListener,
         Application.ActivityLifecycleCallbacks {
     private final Activity activity;
@@ -45,7 +45,8 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
     private Session session;
     private volatile Location fix;
     private volatile boolean stopped, started;
-    private boolean tracked;
+    private boolean tracked, demo, geospatial, localized;
+    private long lastGeospatial;
     private long lastFix, opened, lastPose;
     private volatile long lease;
     private final Runnable watchdog = new Runnable() {
@@ -74,7 +75,7 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
         channel = new MethodChannel(messenger, "app.kaze/guardian-ar/" + id);
         channel.setMethodCallHandler((call, result) -> {
             switch (call.method) {
-                case "start": start(); result.success(null); break;
+                case "start": start(Boolean.TRUE.equals(call.argument("demo")), Boolean.TRUE.equals(call.argument("geospatial"))); result.success(null); break;
                 case "render":
                     if (started && !stopped && call.arguments instanceof List && ((List<?>)call.arguments).size() <= 200) {
                         @SuppressWarnings("unchecked") List<Map<String,Object>> next = (List<Map<String,Object>>)call.arguments;
@@ -88,27 +89,37 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
         activity.getApplication().registerActivityLifecycleCallbacks(this);
     }
 
-    private void start() {
+    private void start(boolean demo, boolean geospatial) {
         if (started || stopped) return;
+        this.demo = demo;
+        this.geospatial = geospatial && !demo;
         // A platform view may never open a camera on an active wearer device.
         if (Config.prefs(activity).getBoolean("active", false) ||
             activity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
-            activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            (!demo && activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)) {
             fail(); return;
         }
         try {
             session = new Session(activity);
-            Integer timebase = activity.getSystemService(CameraManager.class)
-                .getCameraCharacteristics(session.getCameraConfig().getCameraId())
-                .get(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE);
-            if (timebase == null || timebase != CameraMetadata.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME) {
-                throw new IllegalStateException("Camera and location clocks cannot be synchronized");
+            if (!demo && !this.geospatial) {
+                Integer timebase = activity.getSystemService(CameraManager.class)
+                    .getCameraCharacteristics(session.getCameraConfig().getCameraId())
+                    .get(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE);
+                if (timebase == null || timebase != CameraMetadata.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME) {
+                    throw new IllegalStateException("Camera and location clocks cannot be synchronized");
+                }
             }
             com.google.ar.core.Config config = new com.google.ar.core.Config(session);
             config.setPlaneFindingMode(com.google.ar.core.Config.PlaneFindingMode.DISABLED);
             config.setFocusMode(com.google.ar.core.Config.FocusMode.AUTO);
+            if (this.geospatial) {
+                if (!session.isGeospatialModeSupported(com.google.ar.core.Config.GeospatialMode.ENABLED)) {
+                    fail("Google alignment is unsupported on this phone. Reopen the camera and choose local alignment."); return;
+                }
+                config.setGeospatialMode(com.google.ar.core.Config.GeospatialMode.ENABLED);
+            }
             session.configure(config);
-            locations.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this, Looper.getMainLooper());
+            if (!demo) locations.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this, Looper.getMainLooper());
             session.resume(); opened = SystemClock.elapsedRealtime(); started = true; view.onResume();
             main.postDelayed(watchdog, 500);
         } catch (Exception e) { fail(); }
@@ -125,8 +136,11 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
         if (session != null) { session.pause(); session.close(); session = null; }
     }
     private void fail() {
+        fail(null);
+    }
+    private void fail(String reason) {
         points = Collections.emptyList();
-        main.post(() -> { stop(); channel.invokeMethod("failure", null); });
+        main.post(() -> { stop(); channel.invokeMethod("failure", reason); });
     }
     @Override public View getView() { return view; }
     @Override public void dispose() {
@@ -160,7 +174,7 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
         if (!started || stopped || session == null) return;
         try {
             if (activity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
-                activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                (!demo && activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) ||
                 Config.prefs(activity).getBoolean("active", false)) { fail(); return; }
             session.setDisplayGeometry(activity.getWindowManager().getDefaultDisplay().getRotation(), width, height);
             session.setCameraTextureName(texture);
@@ -186,11 +200,12 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
                 Pose pose = c.getPose();
                 float[] back = pose.getZAxis();
                 Map<String,Object> live = new HashMap<>();
-                live.put("x", (double)pose.tx()); live.put("z", (double)pose.tz());
+                live.put("x", (double)pose.tx()); live.put("y", (double)pose.ty()); live.put("z", (double)pose.tz());
                 live.put("forwardX", (double)-back[0]); live.put("forwardZ", (double)-back[2]);
                 main.post(() -> { if (!stopped) channel.invokeMethod("pose", live); });
             }
-            sample(frame, c);
+            if (geospatial) sampleGeospatial(frame, c);
+            else if (!demo) sample(frame, c);
             c.getProjectionMatrix(projection,0,.1f,100f); c.getViewMatrix(camera,0);
             Matrix.multiplyMM(mvp,0,projection,0,camera,0);
             GLES20.glEnable(GLES20.GL_DEPTH_TEST);
@@ -203,6 +218,36 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
                 previous = p;
             }
         } catch (Exception e) { fail(); }
+    }
+
+    private void sampleGeospatial(Frame frame, Camera camera) {
+        Earth earth = session.getEarth();
+        if (earth == null) return;
+        if (earth.getEarthState() != Earth.EarthState.ENABLED) {
+            fail("Google alignment unavailable (" + earth.getEarthState().name() + "). Check the ARCore project setup or choose local alignment."); return;
+        }
+        if (earth.getTrackingState() != TrackingState.TRACKING) {
+            points = Collections.emptyList();
+            if (localized) fail("Google alignment tracking lost. Reopen the camera or use the map.");
+            return;
+        }
+        if (frame.getTimestamp() - lastGeospatial < 100000000) return;
+        Location p = fix;
+        if (p == null || SystemClock.elapsedRealtimeNanos() - p.getElapsedRealtimeNanos() > 10000000000L) return;
+        if (p.isFromMockProvider()) { fail("Mock guardian locations cannot be used for camera alignment."); return; }
+        lastGeospatial = frame.getTimestamp();
+        GeospatialPose geo = earth.getCameraGeospatialPose();
+        if (geo.getHorizontalAccuracy() <= 5 && geo.getOrientationYawAccuracy() <= 10) localized = true;
+        Pose world = camera.getPose();
+        float[] east = earth.getPose(geo.getLatitude(), geo.getLongitude(), geo.getAltitude(), 0, 0, 0, 1).getXAxis();
+        Map<String,Object> m = new HashMap<>();
+        m.put("t", frame.getTimestamp() / 1e9); m.put("x", (double)world.tx()); m.put("y", (double)world.ty()); m.put("z", (double)world.tz());
+        m.put("latitude", geo.getLatitude()); m.put("longitude", geo.getLongitude());
+        m.put("accuracy", geo.getHorizontalAccuracy()); m.put("yaw", Math.atan2(east[2], east[0]));
+        m.put("yawAccuracy", geo.getOrientationYawAccuracy()); m.put("ageMs", 0d); m.put("mock", false);
+        m.put("altitude", geo.getAltitude()); m.put("verticalAccuracy", geo.getVerticalAccuracy());
+        m.put("altitudeDatum", "WGS84-ellipsoid");
+        main.post(() -> { if (!stopped) channel.invokeMethod("geospatial", m); });
     }
 
     private void sample(Frame frame, Camera camera) {
@@ -234,11 +279,19 @@ public final class GuardianArView implements PlatformView, GLSurfaceView.Rendere
         if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(z) || !(r > 0 && r <= 25) ||
             !(horizontal ? v == 0 : v > 0 && v <= 10)) return;
         boolean watch = "watch".equals(p.get("source"));
-        GLES20.glUniform4f(GLES20.glGetUniformLocation(geometryProgram,"color"),watch ? 1f : 0f, watch ? .55f : 1f, watch ? .05f : 1f,1f);
+        boolean synthetic = "demo".equals(p.get("source"));
+        GLES20.glUniform4f(GLES20.glGetUniformLocation(geometryProgram,"color"),synthetic || watch ? 1f : 0f,
+            synthetic ? .2f : watch ? .55f : 1f, synthetic ? .7f : watch ? .05f : 1f,1f);
         float[] ring = new float[48 * 3];
         for (int i=0;i<48;i++) { ring[3*i]=x+r*(float)Math.cos(i*Math.PI/24); ring[3*i+1]=y; ring[3*i+2]=z+r*(float)Math.sin(i*Math.PI/24); }
         geometry(ring,GLES20.GL_LINE_LOOP);
         if (!horizontal) geometry(new float[]{x,y-v,z,x,y+v,z},GLES20.GL_LINES);
+        if (synthetic && Boolean.TRUE.equals(p.get("wearer"))) {
+            geometry(new float[]{x,y+.3f,z,x,y+1f,z,
+                x-.3f,y+.7f,z,x+.3f,y+.7f,z,
+                x,y+.3f,z,x-.2f,y,z, x,y+.3f,z,x+.2f,y,z}, GLES20.GL_LINES);
+            y += 1.2f;
+        }
         // A small metric octahedron marks the observation; rings are allowances.
         float s=.18f;
         float[][] vertices={{x+s,y,z},{x,y,z+s},{x-s,y,z},{x,y,z-s}};

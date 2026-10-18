@@ -30,6 +30,8 @@ android {
 }
 dependencies {
     implementation("com.google.ar:core:1.57.0")
+    implementation("com.google.android.gms:play-services-auth:21.4.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation(project(":shared"))
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
 }

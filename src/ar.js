@@ -18,13 +18,13 @@ export function localHorizontal(anchor, point) {
     z: Math.sin(lat) * Math.cos(lon) * dx + Math.sin(lat) * Math.sin(lon) * dy - Math.cos(lat) * dz };
 }
 
-const horizontalUsable = f => !f.mock && Number.isFinite(f.latitude) && Number.isFinite(f.longitude)
+const horizontalUsable = f => (!f.mock || f.simulated === true && f.provider === 'kaze-demo') && Number.isFinite(f.latitude) && Number.isFinite(f.longitude)
   && Number.isFinite(f.accuracy) && f.accuracy > 0 && f.accuracy <= 25;
 const verticalUsable = f => Number.isFinite(f.altitude) && Number.isFinite(f.verticalAccuracy)
   && f.verticalAccuracy > 0 && f.verticalAccuracy <= 10;
 
-export function guardianArTrail(events, now) {
-  const geography = geographicTrail(events, now);
+export function guardianArTrail(events, now, { simulation = false } = {}) {
+  const geography = geographicTrail(events, now, { simulation });
   // The anchor ID identifies the frame. Earlier fixes arriving late can change
   // it, in which case the guardian must discard its old camera registration.
   const accepted = geography.paths.flatMap(path => path.points).sort((a, b) => a.fixAt - b.fixAt);
@@ -54,7 +54,8 @@ export function guardianArTrail(events, now) {
         horizontalAccuracy: fix.accuracy, relativeHorizontalUncertainty: fix.accuracy + anchor.accuracy,
         verticalUncertainty: heightKnown ? fix.verticalAccuracy + anchor.verticalAccuracy : null,
         altitudeDatum: heightKnown && fix.altitudeDatum === anchor.altitudeDatum ? fix.altitudeDatum ?? null : null,
-        provider: fix.provider, provenance: fix.provenance });
+        provider: fix.provider, provenance: fix.provenance,
+        ...(fix.street ? { street: fix.street } : {}) });
       included++;
     }
   }
@@ -62,10 +63,10 @@ export function guardianArTrail(events, now) {
   const current = !!latest && horizontalUsable(latest) && now - latest.fixAt <= 30000 && now >= latest.fixAt
     && meters(anchor, latest) <= 2000;
   if (omitted) warnings.push('Uncertain or distant observations were omitted; no line crosses those gaps.');
-  return { version: 1, available: included > 0, generatedAt: now,
+  return { version: 1, available: included > 0, generatedAt: now, simulated: simulation,
     frame: { kind: 'WGS84-local-tangent', units: 'meters', axes: { x: 'east', y: 'up', z: 'south' },
       anchor, registrationRequired: true, cameraAligned: false },
-    paths, omitted, latestFixAt: latest?.fixAt ?? null,
+    paths, omitted, latestFixAt: latest?.fixAt ?? null, latestId: latest?.id ?? null,
     guidanceAllowed: false, fallback: current ? 'alignment-required' : 'map',
     warnings };
 }

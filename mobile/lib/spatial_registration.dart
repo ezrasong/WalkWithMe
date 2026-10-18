@@ -104,15 +104,52 @@ class SpatialRegistration {
       _uncertainty = 0,
       _vertical = double.infinity;
   int checks = 0;
+  bool geospatial = false;
   bool failed = false;
-  bool get ready => checks >= 3 && !failed;
+  bool get ready => (geospatial || checks >= 3) && !failed;
   String get status => failed
       ? 'Registration lost. Return to the map and reopen AR.'
+      : geospatial
+      ? 'Google-assisted alignment active. Follow the recorded trail where passable.'
       : _end == null
       ? 'Walk safely outdoors with camera tracking. Need a 30–100 m baseline and precise locations.'
       : !ready
       ? 'Continue walking: validating registration ($checks/3 later fixes).'
       : 'Camera aligned. Baseline ${baseline.round()} m; validation residual ${residual.toStringAsFixed(1)} m. Follow the recorded trail where safe.';
+
+  // The native Earth pose supplies a current EUS-to-camera-world transform.
+  // Reuse the same range, source, gap, height and uncertainty rendering gates.
+  bool addGeospatial(Map m) {
+    final p = SpatialSample.parse(m, anchor);
+    if (failed ||
+        p == null ||
+        m['yaw'] is! num ||
+        !(m['yaw'] as num).isFinite ||
+        m['yawAccuracy'] is! num ||
+        !(m['yawAccuracy'] as num).isFinite ||
+        _n(m, 'yawAccuracy') <= 0 ||
+        _n(m, 'yawAccuracy') > 10 ||
+        (_last != null && p.t <= _last!.t)) {
+      return false;
+    }
+    geospatial = true;
+    _first = _end = _last = p;
+    _c = math.cos(_n(m, 'yaw'));
+    _s = math.sin(_n(m, 'yaw'));
+    _tx = p.x - _c * p.east + _s * p.south;
+    _tz = p.z - _s * p.east - _c * p.south;
+    _uncertainty = p.accuracy;
+    yawAllowance = _n(m, 'yawAccuracy') * math.pi / 180;
+    _vertical = double.infinity;
+    if (anchor['altitudeDatum'] == 'WGS84-ellipsoid' &&
+        anchor['altitude'] is num &&
+        (anchor['altitude'] as num).isFinite &&
+        p.altitude != null) {
+      _ty = p.y - (p.altitude! - _n(anchor, 'altitude'));
+      _vertical = p.verticalAccuracy!;
+    }
+    return true;
+  }
 
   // A frozen two-point rigid fit is checked against later, withheld fixes.
   // GPS accuracy values are allowances, never calibrated confidence intervals.
@@ -254,6 +291,8 @@ class SpatialRegistration {
         lastMode = mode;
         points.add({
           'id': id,
+          'wearer': packet['simulated'] == true && id == packet['latestId'],
+          if (p['street'] is String) 'street': p['street'] as String,
           'segment': segment,
           'heightMode': mode,
           'x': wx,
@@ -263,7 +302,9 @@ class SpatialRegistration {
           'z': wz,
           'uncertainty': uncertainty,
           'verticalUncertainty': measured ? vertical : 0.0,
-          'source': path['source'] as String,
+          'source': packet['simulated'] == true
+              ? 'demo'
+              : path['source'] as String,
         });
       }
       pathIndex++;
@@ -299,6 +340,7 @@ class CameraTrailGuidance {
     required double z,
     required double forwardX,
     required double forwardZ,
+    double reachRadius = 3,
   }) {
     if (_distance(forwardX, forwardZ) < .2) return null;
     if (segment == null) {
@@ -323,7 +365,8 @@ class CameraTrailGuidance {
     var index = path.indexWhere((p) => p['id'] == target);
     if (index < 0) return null;
     while (index < path.length - 1 &&
-        _distance(_n(path[index], 'x') - x, _n(path[index], 'z') - z) <= 3) {
+        _distance(_n(path[index], 'x') - x, _n(path[index], 'z') - z) <=
+            reachRadius) {
       index++;
     }
     final p = path[index];
